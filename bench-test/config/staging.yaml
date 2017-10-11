@@ -1,0 +1,34 @@
+service:
+  env: "staging"
+  deployment: "${UDEPLOY_DEPLOYMENT_NAME}"
+  role: "${CADENCE_BENCH_ROLE}"
+  domain: "chronos-bench"
+  httpListenPort: ${UBER_PORT_HTTP}
+
+worker:
+  numTaskLists: 20
+
+basic:
+  totalLaunchCount: 1000
+  routineCount: 1
+  chainSequence: 4
+  concurrentCount: 1
+  payloadSizeBytes: 1024
+
+load:
+  testName: "chronos_marketplace_hs"
+  workflowRPS: 1000
+
+m3:
+  env: "staging"
+  hostPort: 127.0.0.1:9052
+  service: cadence-bench
+  tags:
+    deployment: "${UDEPLOY_DEPLOYMENT_NAME}"
+
+zap:
+  level: info
+  outputPaths: [/var/log/udocker/cadence-bench/${UDEPLOY_APP_ID}-${UDEPLOY_DEPLOYMENT_NAME}.log]
+  errorOutputPaths: [/var/log/udocker/cadence-bench/${UDEPLOY_APP_ID}-${UDEPLOY_DEPLOYMENT_NAME}.log]
+  initialFields:
+    deployment: "${UDEPLOY_DEPLOYMENT_NAME}"

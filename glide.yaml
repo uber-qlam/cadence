@@ -35,6 +35,23 @@ import:
   - transport/http
   - transport/tchannel
 
+# For bench-test
+- package: go.uber.org/zap
+  version: ^1
+- package: github.com/uber-go/tally
+  version: v3.0.1
+- package: github.com/sirupsen/logrus
+- package: github.com/pkg/errors
+  version: v0.8.0
+- package: github.com/stretchr/testify
+  version: e964b172ca7f4c322ee4c39ea605ff53fab44f79
+# This is cadence client instead of server
+- package: go.uber.org/cadence
+  version: v0.4.0
+  subpackages:
+  - .gen/go/cadence
+
+
 # Added excludeDirs to prevent build from failing on the yarpc generated code.
 excludeDirs:
   - .gen

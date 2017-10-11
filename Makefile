@@ -83,6 +83,11 @@ cadence-cassandra-tool: vendor/glide.updated $(TOOLS_SRC)
 cadence: vendor/glide.updated $(ALL_SRC)
 	go build -i -o cadence cmd/server/cadence.go cmd/server/server.go
 
+cadence-bench-test: vendor/glide.updated $(ALL_SRC)
+	go build -i -o cadence-bench-test cmd/bench-test/bench.go
+
+bins_bench: lint copyright cadence-bench-test
+
 bins_nothrift: lint copyright cadence-cassandra-tool cadence
 
 bins: thriftc bins_nothrift
@@ -136,6 +141,7 @@ fmt:
 clean:
 	rm -f cadence
 	rm -f cadence-cassandra-tool
+	rm -f cadence-bench-test
 	rm -Rf $(BUILD)
 
 install-schema: bins
