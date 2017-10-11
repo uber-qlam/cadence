@@ -21,10 +21,10 @@
 package main
 
 import (
-	"log"
-
 	"github.com/uber/cadence/bench-test/lib"
 	"github.com/uber/cadence/bench-test/load"
+	"log"
+	"time"
 )
 
 func main() {
@@ -39,8 +39,10 @@ func main() {
 	case "worker":
 		newWorker(cfg).Run()
 	case "all":
-		go func() { newWorker(cfg).Run() }()
 		newController(cfg).Run()
+		//wait for controller creating domain
+		time.Sleep(1 * time.Second)
+		go func() { newWorker(cfg).Run() }()
 	default:
 		log.Fatalf("unknown role name %v", cfg.Service.Role)
 	}
