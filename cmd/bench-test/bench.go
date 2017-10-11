@@ -39,10 +39,13 @@ func main() {
 	case "worker":
 		newWorker(cfg).Run()
 	case "all":
+		go func() {
+			//wait for controller creating domain
+			time.Sleep(1 * time.Second)
+			newWorker(cfg).Run()
+		}()
 		newController(cfg).Run()
-		//wait for controller creating domain
-		time.Sleep(1 * time.Second)
-		go func() { newWorker(cfg).Run() }()
+
 	default:
 		log.Fatalf("unknown role name %v", cfg.Service.Role)
 	}
