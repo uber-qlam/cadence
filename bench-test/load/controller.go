@@ -24,12 +24,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	//"strconv"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/uber/cadence/bench-test/cadence-client-go/factory"
 	"github.com/uber/cadence/bench-test/lib"
-	//"code.uber.internal/devexp/cadence-client-go/factory"
 
 	"go.uber.org/cadence/.gen/go/shared"
 	"go.uber.org/zap"
@@ -173,49 +173,47 @@ func (c *Controller) stopHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Controller) createBasicLoadGenerator(r *http.Request) (lib.LoadGenerator, error) {
-	//basicConfig := c.runtime.Basic
-	//workerConfig := c.runtime.Worker
-	//totalLaunchCountStr := r.URL.Query().Get("totalLaunchCount")
-	//if len(totalLaunchCountStr) > 0 {
-	//	totalLaunchCount, _ := strconv.Atoi(totalLaunchCountStr)
-	//	basicConfig.TotalLaunchCount = totalLaunchCount
-	//}
-	//routineCountStr := r.URL.Query().Get("routineCount")
-	//if len(routineCountStr) > 0 {
-	//	routineCount, _ := strconv.Atoi(routineCountStr)
-	//	basicConfig.RoutineCount = routineCount
-	//}
-	//chainSequenceStr := r.URL.Query().Get("chainSequence")
-	//if len(chainSequenceStr) > 0 {
-	//	chainSequence, _ := strconv.Atoi(chainSequenceStr)
-	//	basicConfig.ChainSequence = chainSequence
-	//}
-	//concurrentCountStr := r.URL.Query().Get("concurrentCount")
-	//if len(chainSequenceStr) > 0 {
-	//	concurrentCount, _ := strconv.Atoi(concurrentCountStr)
-	//	basicConfig.ConcurrentCount = concurrentCount
-	//}
-	//payloadSizeBytesStr := r.URL.Query().Get("payloadSizeBytes")
-	//if len(payloadSizeBytesStr) > 0 {
-	//	payloadSizeBytes, _ := strconv.Atoi(payloadSizeBytesStr)
-	//	basicConfig.PayloadSizeBytes = payloadSizeBytes
-	//}
-	//return c.factory.CreateBasic(&basicConfig, &workerConfig)
-	return nil, nil
+	basicConfig := c.runtime.Basic
+	workerConfig := c.runtime.Worker
+	totalLaunchCountStr := r.URL.Query().Get("totalLaunchCount")
+	if len(totalLaunchCountStr) > 0 {
+		totalLaunchCount, _ := strconv.Atoi(totalLaunchCountStr)
+		basicConfig.TotalLaunchCount = totalLaunchCount
+	}
+	routineCountStr := r.URL.Query().Get("routineCount")
+	if len(routineCountStr) > 0 {
+		routineCount, _ := strconv.Atoi(routineCountStr)
+		basicConfig.RoutineCount = routineCount
+	}
+	chainSequenceStr := r.URL.Query().Get("chainSequence")
+	if len(chainSequenceStr) > 0 {
+		chainSequence, _ := strconv.Atoi(chainSequenceStr)
+		basicConfig.ChainSequence = chainSequence
+	}
+	concurrentCountStr := r.URL.Query().Get("concurrentCount")
+	if len(chainSequenceStr) > 0 {
+		concurrentCount, _ := strconv.Atoi(concurrentCountStr)
+		basicConfig.ConcurrentCount = concurrentCount
+	}
+	payloadSizeBytesStr := r.URL.Query().Get("payloadSizeBytes")
+	if len(payloadSizeBytesStr) > 0 {
+		payloadSizeBytes, _ := strconv.Atoi(payloadSizeBytesStr)
+		basicConfig.PayloadSizeBytes = payloadSizeBytes
+	}
+	return c.factory.CreateBasic(&basicConfig, &workerConfig)
 }
 
 func (c *Controller) createLoadGenerator(testName string, r *http.Request) (lib.LoadGenerator, error) {
-	//loadCfg := c.runtime.Load
-	//loadCfg.TestName = testName
-	//return c.factory.Create(&loadCfg, &c.runtime.Worker, &c.runtime.Service)
-	return nil, nil
+	loadCfg := c.runtime.Load
+	loadCfg.TestName = testName
+	return c.factory.Create(&loadCfg, &c.runtime.Worker, &c.runtime.Service)
 }
 
 func (c *Controller) createDomain() error {
 	// only create the domain in development environment
-	//if c.runtime.Service.Env != string(factory.Development) {
-	//	return nil
-	//}
+	if c.runtime.Service.Env != string(factory.Development) {
+		return nil
+	}
 	name := c.runtime.Service.Domain
 	desc := "Domain for running cadence load test"
 	owner := "cadence-oncall-group@uber.com"

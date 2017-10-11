@@ -22,35 +22,42 @@ package lib
 
 import (
 	"fmt"
-	//"time"
+	"time"
 
-	//"code.uber.internal/devexp/cadence-client-go/factory"
-	//"code.uber.internal/go-common.git/x/config"
 	"context"
+	"github.com/cactus/go-statsd-client/statsd"
 	"github.com/uber-go/tally"
-	"github.com/uber-go/tally/m3"
+	statsdreporter "github.com/uber-go/tally/statsd"
+	"github.com/uber/cadence/bench-test/cadence-client-go/factory"
+
+	"github.com/uber/cadence/common/service/config"
 	"go.uber.org/zap"
-	//"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
 )
 
 type (
 	Config struct {
-		M3      m3.Configuration `yaml:"m3"`
-		Zap     zap.Config       `yaml:"zap"`
-		Load    LoadTestConfig   `yaml:"load"`
-		Basic   BasicTestConfig  `yaml:"basic"`
-		Worker  WorkerConfig     `yaml:"worker"`
-		Service ServiceConfig    `yaml:"service"`
+		Statsd  StatsdConfig    `yaml:"statsd"`
+		Zap     zap.Config      `yaml:"zap"`
+		Load    LoadTestConfig  `yaml:"load"`
+		Basic   BasicTestConfig `yaml:"basic"`
+		Worker  WorkerConfig    `yaml:"worker"`
+		Service ServiceConfig   `yaml:"service"`
 	}
 
 	ServiceConfig struct {
-		Env            string `yaml:"env"`
-		Deployment     string `yaml:"deployment"`
-		Role           string `yaml:"role"`
-		Domain         string `yaml:"domain"`
-		ServerHostPort string `yaml:"serverHostPort"`
-		HTTPListenPort int    `yaml:"httpListenPort"`
+		Env            string   `yaml:"env"`
+		Deployment     string   `yaml:"deployment"`
+		Role           string   `yaml:"role"`
+		Domain         string   `yaml:"domain"`
+		ServerHostPort []string `yaml:"serverHostPort"`
+		HTTPListenPort int      `yaml:"httpListenPort"`
+	}
+
+	StatsdConfig struct {
+		Address string `yaml:"addr"`
+		Prefix  string `yaml:"prefix"`
 	}
 
 	LoadTestConfig struct {
@@ -73,9 +80,9 @@ type (
 
 func LoadConfig() (*Config, error) {
 	var cfg Config
-	//if err := config.Load(&cfg); err != nil {
-	//	return nil, err
-	//}
+	if err := config.Load("bench", "./config/bench/", "", &cfg); err != nil {
+		return nil, err
+	}
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -96,12 +103,12 @@ func (c *Config) validate() error {
 }
 
 func isValidEnv(env string) bool {
-	//validSet := []factory.Environment{factory.Development, factory.Staging, factory.Production}
-	//for _, e := range validSet {
-	//	if env == string(e) {
-	//		return true
-	//	}
-	//}
+	validSet := []factory.Environment{factory.Development, factory.Staging, factory.Production}
+	for _, e := range validSet {
+		if env == string(e) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -116,10 +123,11 @@ type RuntimeContext struct {
 
 // NewRuntimeContext builds a runtime context from the config
 func NewRuntimeContext(cfg *Config) (*RuntimeContext, error) {
-	scope, err := newTallyScope(&cfg.M3)
+	scope, err := newTallyScope(&cfg.Statsd)
 	if err != nil {
 		return nil, err
 	}
+
 	logger, err := newLogger(&cfg.Zap, cfg.Service.Env)
 	if err != nil {
 		return nil, err
@@ -134,30 +142,36 @@ func NewRuntimeContext(cfg *Config) (*RuntimeContext, error) {
 	}, nil
 }
 
-// newTallyScope builds and returns a tally scope from m3 configuration
-func newTallyScope(cfg *m3.Configuration) (tally.Scope, error) {
-	//reporter, err := cfg.NewReporter()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//scopeOpts := tally.ScopeOptions{CachedReporter: reporter}
-	//scope, _ := tally.NewRootScope(scopeOpts, time.Second)
-	return nil, nil
+// newTallyScope builds and returns a tally scope from statsd configuration
+func newTallyScope(cfg *StatsdConfig) (tally.Scope, error) {
+	statter, err := statsd.NewBufferedClient(cfg.Address, cfg.Prefix, 100*time.Millisecond, 1440)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := statsdreporter.Options{}
+	r := statsdreporter.NewReporter(statter, opts)
+
+	scope, _ := tally.NewRootScope(tally.ScopeOptions{
+		Prefix:   "my-service", //TODO don't know what it is
+		Tags:     map[string]string{},
+		Reporter: r,
+	}, 1*time.Second)
+	return scope, err
 }
 
 // newLogger creates and returns a new instance of bark logger
 func newLogger(cfg *zap.Config, env string) (*zap.Logger, error) {
-	//if factory.Environment(env) == factory.Development {
-	//	devConfig := zap.NewDevelopmentConfig()
-	//	devConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	//	return devConfig.Build()
-	//}
-	//cfg.Encoding = "json"
-	//cfg.EncoderConfig = zap.NewProductionEncoderConfig()
-	//cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	//cfg.Development = false
-	//return cfg.Build()
-	return nil, nil
+	if factory.Environment(env) == factory.Development {
+		devConfig := zap.NewDevelopmentConfig()
+		devConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		return devConfig.Build()
+	}
+	cfg.Encoding = "json"
+	cfg.EncoderConfig = zap.NewProductionEncoderConfig()
+	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	cfg.Development = false
+	return cfg.Build()
 }
 
 const CtxKeyServiceConfig = "serviceConfig"

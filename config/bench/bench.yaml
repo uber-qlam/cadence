@@ -1,9 +1,10 @@
+#Config for bench-test
 service:
   env: "development"
   deployment: "test"
   role: "all"
   domain: "chronos-bench"
-  serverHostPort: "127.0.0.1:7933"
+  serverHostPort: ["127.0.0.1:7933"]
   httpListenPort: 9696
 
 worker:
@@ -26,9 +27,6 @@ zap:
   outputPaths: ["stdout"]
   errorOutputPaths: ["stdout"]
 
-m3:
-  env: "test"
-  hostPort: 127.0.0.1:9052
-  service: cadence-bench
-  tags:
-    deployment: "test"
+statsd:
+  addr: 127.0.0.1:8125
+  prefix: cadence-bench

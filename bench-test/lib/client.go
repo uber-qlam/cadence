@@ -22,11 +22,14 @@ package lib
 
 import (
 	"context"
-	//"code.uber.internal/devexp/cadence-client-go/factory"
+	"github.com/uber/cadence/bench-test/cadence-client-go/factory"
+
 	//"code.uber.internal/go-common.git/x/tchannel"
 	"go.uber.org/cadence"
 	gen "go.uber.org/cadence/.gen/go/cadence"
 	"go.uber.org/cadence/.gen/go/shared"
+	"math/rand"
+	"time"
 )
 
 const workflowRetentionDays = 1
@@ -67,37 +70,28 @@ func (client *CadenceClient) CreateDomain(name string, desc string, owner string
 // NewCadenceClient builds a CadenceClient from the runtimeContext
 func NewCadenceClient(runtime *RuntimeContext) (CadenceClient, error) {
 	var err error
-	//
-	//builder := factory.NewBuilder()
-	//builder.SetDomain(runtime.Service.Domain)
-	//builder.SetEnv(factory.Environment(runtime.Service.Env))
-	//builder.SetMetricsScope(runtime.Metrics)
-	//builder.SetTChannelConfig(&xtchannel.Configuration{UseMuttley: true})
-	//
-	//if isEnvDevelopment(runtime.Service.Env) && len(runtime.Service.ServerHostPort) > 0 {
-	//	// localhost override during development
-	//	builder.SetTChannelConfig(nil) // don't use muttley
-	//	builder.SetHostPort(runtime.Service.ServerHostPort)
-	//}
-	//
-	//var client CadenceClient
-	//client.Client, err = builder.BuildCadenceClient()
-	//if err != nil {
-	//	return CadenceClient{}, err
-	//}
-	//client.DomainClient, err = builder.BuildCadenceDomainClient()
-	//if err != nil {
-	//	return CadenceClient{}, err
-	//}
-	//client.TChan, err = builder.BuildServiceClient()
-	//if err != nil {
-	//	return CadenceClient{}, err
-	//}
-	//return client, nil
-	return CadenceClient{}, err
-}
 
-func isEnvDevelopment(env string) bool {
-	//return env == string(factory.Development)
-	return false
+	builder := factory.NewBuilder()
+	builder.SetDomain(runtime.Service.Domain)
+	builder.SetEnv(factory.Environment(runtime.Service.Env))
+	builder.SetMetricsScope(runtime.Metrics)
+
+	rand.Seed(time.Now().Unix())
+	hosts := runtime.Service.ServerHostPort
+	builder.SetHostPort(hosts[rand.Intn(len(hosts))])
+
+	var client CadenceClient
+	client.Client, err = builder.BuildCadenceClient()
+	if err != nil {
+		return CadenceClient{}, err
+	}
+	client.DomainClient, err = builder.BuildCadenceDomainClient()
+	if err != nil {
+		return CadenceClient{}, err
+	}
+	client.TChan, err = builder.BuildServiceClient()
+	if err != nil {
+		return CadenceClient{}, err
+	}
+	return client, nil
 }
