@@ -34,6 +34,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
+	"os"
 )
 
 type (
@@ -80,7 +81,8 @@ type (
 
 func LoadConfig() (*Config, error) {
 	var cfg Config
-	if err := config.Load("bench", "./config/bench/", "", &cfg); err != nil {
+	env_name := os.Args[1]
+	if err := config.Load(env_name, "./config/bench/", "", &cfg); err != nil {
 		return nil, err
 	}
 	if err := cfg.validate(); err != nil {
