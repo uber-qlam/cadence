@@ -142,7 +142,9 @@ startLoop:
 			l.logger.Sugar().Debugf("Created Workflow - workflow Id: %s, run Id: %s \n", we.ID, we.RunID)
 		} else {
 			atomic.AddInt64(&l.failedCount, 1)
-			l.logger.Sugar().Errorf("Failed to start workflow execution. ID: %v, Error: %v", we.ID, err)
+			l.logger.Sugar().Errorf(
+				"Failed to start workflow execution. ID: %v, Error: %v", workflowOptions.ID, err,
+			)
 		}
 		jitter := time.Duration(75 + rand.Intn(25))
 		time.Sleep(jitter * time.Millisecond)
