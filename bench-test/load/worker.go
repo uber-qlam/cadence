@@ -117,7 +117,6 @@ func (w *loadTestWorker) newWorkerOptions(id int) cadence.WorkerOptions {
 		MetricsScope:                       w.runtime.Metrics,
 		MaxConcurrentActivityExecutionSize: activityWorkerConcurrency,
 		BackgroundActivityContext:          w.newActivityContext(id),
-		MaxActivityExecutionPerSecond:      10,
 	}
 }
 
