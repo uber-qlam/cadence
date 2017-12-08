@@ -76,9 +76,12 @@ func (w *loadTestWorker) Run() error {
 	config := &w.runtime.Worker
 	for i := 0; i < config.NumTaskLists; i++ {
 		taskList := common.GetTaskListName(i)
-		worker := cadence.NewWorker(w.client.TChan, w.runtime.Service.Domain, taskList, w.newWorkerOptions(i))
-		if err := worker.Start(); err != nil {
-			return err
+		// for each taskList, generate 10 workers
+		for j := 0; j < 10; j++ {
+			worker := cadence.NewWorker(w.client.TChan, w.runtime.Service.Domain, taskList, w.newWorkerOptions(i))
+			if err := worker.Start(); err != nil {
+				return err
+			}
 		}
 	}
 	go w.emitWorkerMetrics()
