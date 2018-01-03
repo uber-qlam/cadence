@@ -154,15 +154,16 @@ imports:
 - name: go.uber.org/atomic
   version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
 - name: go.uber.org/cadence
-  version: b13ab9c8009b25b1c805e391bf63a6e0210426e0
+  version: 63fac2e877c6c4ec30dbc843df395718f1abe574
   subpackages:
   - .gen/go/cadence
   - .gen/go/shared
-  - common
-  - common/backoff
-  - common/metrics
-  - common/util
-  - mocks
+  - activity
+  - client
+  - encoded
+  - testsuite
+  - worker
+  - workflow
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/thriftrw

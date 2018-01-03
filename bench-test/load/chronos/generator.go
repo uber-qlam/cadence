@@ -29,7 +29,7 @@ import (
 	"github.com/uber-go/tally"
 	"github.com/uber/cadence/bench-test/lib"
 	"github.com/uber/cadence/bench-test/load/common"
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/client"
 	"go.uber.org/zap"
 )
 
@@ -141,8 +141,8 @@ func (g *loadGenerator) startJob(job jobInput) error {
 	return nil
 }
 
-func (g *loadGenerator) workflowOptions(taskList string, decisionTimeout time.Duration) cadence.StartWorkflowOptions {
-	return cadence.StartWorkflowOptions{
+func (g *loadGenerator) workflowOptions(taskList string, decisionTimeout time.Duration) client.StartWorkflowOptions {
+	return client.StartWorkflowOptions{
 		TaskList:                        taskList,
 		ExecutionStartToCloseTimeout:    10 * time.Minute,
 		DecisionTaskStartToCloseTimeout: decisionTimeout,

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/uber-go/tally"
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/workflow"
 )
 
 // counters go here
@@ -52,7 +52,7 @@ const (
 // record success/failed and latency metrics at the end
 // of a workflow
 type workflowMetricsProfile struct {
-	ctx            cadence.Context
+	ctx            workflow.Context
 	startTimestamp int64
 	Scope          tally.Scope
 }
@@ -84,22 +84,22 @@ func RecordActivityEnd(scope tally.Scope, sw tally.Stopwatch, err error) {
 
 // workflowMetricScope creates and returns a child metric scope with tags
 // that identify the current workflow type
-func workflowMetricScope(ctx cadence.Context, wfType string) tally.Scope {
-	parent := cadence.GetMetricsScope(ctx)
+func workflowMetricScope(ctx workflow.Context, wfType string) tally.Scope {
+	parent := workflow.GetMetricsScope(ctx)
 	return parent.Tagged(map[string]string{"operation": wfType})
 }
 
 // end records the elapsed time and reports the latency,
 // success, failed counts to m3
 func (profile *workflowMetricsProfile) End(err error) error {
-	now := cadence.Now(profile.ctx).UnixNano()
+	now := workflow.Now(profile.ctx).UnixNano()
 	elapsed := time.Duration(now - profile.startTimestamp)
 	return recordWorkflowEnd(profile.Scope, elapsed, err)
 }
 
 // recordWorkflowStart emits metrics at the beginning of a workflow function
-func recordWorkflowStart(ctx cadence.Context, wfType string, scheduledTimeNanos int64) *workflowMetricsProfile {
-	now := cadence.Now(ctx).UnixNano()
+func recordWorkflowStart(ctx workflow.Context, wfType string, scheduledTimeNanos int64) *workflowMetricsProfile {
+	now := workflow.Now(ctx).UnixNano()
 	scope := workflowMetricScope(ctx, wfType)
 	elapsed := MaxInt64(0, now-scheduledTimeNanos)
 	scope.Timer(startLatency).Record(time.Duration(elapsed))
@@ -119,7 +119,7 @@ func recordWorkflowEnd(scope tally.Scope, elapsed time.Duration, err error) erro
 		return err
 	}
 	scope.Counter(FailedCount).Inc(1)
-	if _, ok := err.(*cadence.TimeoutError); ok {
+	if _, ok := err.(*workflow.TimeoutError); ok {
 		scope.Counter(errTimeoutCount).Inc(1)
 	}
 	return err

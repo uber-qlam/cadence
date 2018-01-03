@@ -25,16 +25,18 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/cactus/go-statsd-client/statsd"
 	"github.com/uber-go/tally"
 	statsdreporter "github.com/uber-go/tally/statsd"
 	"github.com/uber/cadence/bench-test/cadence-client-go/factory"
 
+	"os"
+
 	"github.com/uber/cadence/common/service/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
-	"os"
 )
 
 type (
@@ -146,7 +148,7 @@ func NewRuntimeContext(cfg *Config) (*RuntimeContext, error) {
 
 // newTallyScope builds and returns a tally scope from statsd configuration
 func newTallyScope(cfg *StatsdConfig) (tally.Scope, error) {
-	statter, err := statsd.NewBufferedClient(cfg.Address, cfg.Prefix, 100*time.Millisecond, 1440)
+	statter, err := statsd.NewBufferedClient(cfg.Address, cfg.Prefix, 200*time.Millisecond, -1)
 	if err != nil {
 		return nil, err
 	}

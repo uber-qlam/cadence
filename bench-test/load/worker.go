@@ -33,7 +33,7 @@ import (
 	"github.com/uber/cadence/bench-test/load/chronos"
 	"github.com/uber/cadence/bench-test/load/common"
 
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/worker"
 	"go.uber.org/zap"
 
 	"golang.org/x/time/rate"
@@ -78,7 +78,7 @@ func (w *loadTestWorker) Run() error {
 		taskList := common.GetTaskListName(i)
 		// for each taskList, generate 10 workers
 		for j := 0; j < 10; j++ {
-			worker := cadence.NewWorker(w.client.TChan, w.runtime.Service.Domain, taskList, w.newWorkerOptions(i))
+			worker := worker.NewWorker(w.client.Service, w.runtime.Service.Domain, taskList, w.newWorkerOptions(i))
 			if err := worker.Start(); err != nil {
 				return err
 			}
@@ -114,8 +114,8 @@ func (w *loadTestWorker) emitWorkerMetrics() {
 	}
 }
 
-func (w *loadTestWorker) newWorkerOptions(id int) cadence.WorkerOptions {
-	return cadence.WorkerOptions{
+func (w *loadTestWorker) newWorkerOptions(id int) worker.Options {
+	return worker.Options{
 		Logger:                             w.runtime.Logger,
 		MetricsScope:                       w.runtime.Metrics,
 		MaxConcurrentActivityExecutionSize: activityWorkerConcurrency,

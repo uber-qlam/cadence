@@ -28,25 +28,26 @@ import (
 
 	"github.com/uber/cadence/bench-test/lib"
 
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/activity"
+	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 )
 
 var schedFreq = 10 * time.Minute
 
 func init() {
-	cadence.RegisterWorkflow(highFreqTimerWorkflow)
-	cadence.RegisterActivity(highFreqTimerActivity)
+	workflow.Register(highFreqTimerWorkflow)
+	activity.Register(highFreqTimerActivity)
 }
 
-func highFreqTimerWorkflow(ctx cadence.Context, scheduledTimeNanos int64, freq time.Duration, callback HTTPCallback) error {
+func highFreqTimerWorkflow(ctx workflow.Context, scheduledTimeNanos int64, freq time.Duration, callback HTTPCallback) error {
 	profile, err := lib.BeginWorkflow(ctx, "workflow.highfreq", scheduledTimeNanos)
 	if err != nil {
 		return err
 	}
 
-	taskList := cadence.GetWorkflowInfo(ctx).TaskListName
-	activityOpts := cadence.ActivityOptions{
+	taskList := workflow.GetInfo(ctx).TaskListName
+	activityOpts := workflow.ActivityOptions{
 		TaskList:               taskList,
 		StartToCloseTimeout:    schedFreq + 30*time.Second,
 		ScheduleToStartTimeout: 30 * time.Second,
@@ -55,21 +56,21 @@ func highFreqTimerWorkflow(ctx cadence.Context, scheduledTimeNanos int64, freq t
 	}
 
 	for i := 0; i < 12; i++ {
-		aCtx := cadence.WithActivityOptions(ctx, activityOpts)
-		f := cadence.ExecuteActivity(aCtx, highFreqTimerActivity, cadence.Now(ctx).UnixNano(), freq, callback)
+		aCtx := workflow.WithActivityOptions(ctx, activityOpts)
+		f := workflow.ExecuteActivity(aCtx, highFreqTimerActivity, workflow.Now(ctx).UnixNano(), freq, callback)
 		err := f.Get(ctx, nil)
 		if err != nil {
-			cadence.GetMetricsScope(ctx).Counter("workflow.highfreq.errActivity").Inc(1)
-			cadence.GetLogger(ctx).Error("activity error", zap.Error(err))
+			workflow.GetMetricsScope(ctx).Counter("workflow.highfreq.errActivity").Inc(1)
+			workflow.GetLogger(ctx).Error("activity error", zap.Error(err))
 		}
 	}
 
 	profile.End(nil)
-	return cadence.NewContinueAsNewError(ctx, highFreqTimerWorkflow, cadence.Now(ctx).UnixNano(), freq, callback)
+	return workflow.NewContinueAsNewError(ctx, highFreqTimerWorkflow, workflow.Now(ctx).UnixNano(), freq, callback)
 }
 
 func highFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, freq time.Duration, callback HTTPCallback) error {
-	m := cadence.GetActivityMetricsScope(ctx)
+	m := activity.GetMetricsScope(ctx)
 	scope, sw := lib.RecordActivityStart(m, "activity.highfreq", scheduledTimeNanos)
 	defer func() {
 		scope.Counter("activity.highfreq.stopped").Inc(1)
@@ -78,19 +79,19 @@ func highFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, freq t
 
 	cfg := lib.GetActivityServiceConfig(ctx)
 	if cfg == nil {
-		cadence.GetActivityLogger(ctx).Error("context missing service config")
+		activity.GetLogger(ctx).Error("context missing service config")
 		return nil
 	}
 
 	wm := lib.GetActivityWorkerMetrics(ctx)
 	if wm == nil {
-		cadence.GetActivityLogger(ctx).Error("context missing worker metrics")
+		activity.GetLogger(ctx).Error("context missing worker metrics")
 		return nil
 	}
 
 	rl := lib.GetActivityRebalanceLimiter(ctx)
 	if rl == nil {
-		cadence.GetActivityLogger(ctx).Error("context missing rate limiter")
+		activity.GetLogger(ctx).Error("context missing rate limiter")
 		return nil
 	}
 
@@ -104,7 +105,7 @@ func highFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, freq t
 	for {
 		scope.Counter("callback.invoked").Inc(1)
 		if err := callback.invoke(cfg.HTTPListenPort); err != nil {
-			cadence.GetActivityLogger(ctx).Error("callback.invoke() error",
+			activity.GetLogger(ctx).Error("callback.invoke() error",
 				zap.String("url", callback.URL), zap.Int("port", cfg.HTTPListenPort), zap.Error(err))
 			scope.Counter("callback.errors").Inc(1)
 		}
@@ -118,12 +119,12 @@ func highFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, freq t
 		}
 
 		if now >= nextHBTime {
-			cadence.RecordActivityHeartbeat(ctx)
+			activity.RecordHeartbeat(ctx)
 			nextHBTime = now + int64(time.Minute)
 			scope.Counter("activity.highfreq.hb").Inc(1)
 			if ctx.Err() != nil {
 				scope.Counter("activity.highfreq.errctx").Inc(1)
-				cadence.GetActivityLogger(ctx).Error("activity context error", zap.Error(ctx.Err()))
+				activity.GetLogger(ctx).Error("activity context error", zap.Error(ctx.Err()))
 				return nil
 			}
 		}

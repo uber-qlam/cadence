@@ -26,7 +26,8 @@ import (
 
 	"github.com/uber/cadence/bench-test/load/common"
 
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/activity"
+	"go.uber.org/cadence/workflow"
 )
 
 type (
@@ -46,27 +47,27 @@ type (
 )
 
 func init() {
-	cadence.RegisterWorkflow(stressWorkflowExecute)
-	cadence.RegisterActivity(sleepActivityExecute)
+	workflow.Register(stressWorkflowExecute)
+	activity.Register(sleepActivityExecute)
 }
 
-func stressWorkflowExecute(ctx cadence.Context, workflowInput WorkflowParams) (result []byte, err error) {
+func stressWorkflowExecute(ctx workflow.Context, workflowInput WorkflowParams) (result []byte, err error) {
 	activityParams := sleepActivityParams{
 		Payload: make([]byte, workflowInput.PayloadSizeBytes)}
 
-	ao := cadence.ActivityOptions{
+	ao := workflow.ActivityOptions{
 		TaskList:               common.GetTaskListName(workflowInput.TaskListNumber),
 		ScheduleToStartTimeout: time.Minute,
 		StartToCloseTimeout:    time.Minute,
 		HeartbeatTimeout:       20 * time.Second,
 	}
-	ctx1 := cadence.WithActivityOptions(ctx, ao)
+	ctx1 := workflow.WithActivityOptions(ctx, ao)
 
 	for i := 0; i < workflowInput.ChainSequence; i++ {
-		selector := cadence.NewSelector(ctx)
+		selector := workflow.NewSelector(ctx)
 		var activityErr error
 		for j := 0; j < workflowInput.ConcurrentCount; j++ {
-			selector.AddFuture(cadence.ExecuteActivity(ctx1, sleepActivityExecute, activityParams), func(f cadence.Future) {
+			selector.AddFuture(workflow.ExecuteActivity(ctx1, sleepActivityExecute, activityParams), func(f workflow.Future) {
 				err := f.Get(ctx, nil)
 				if err != nil {
 					activityErr = err

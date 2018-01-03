@@ -31,7 +31,7 @@ import (
 	"github.com/uber/cadence/bench-test/lib"
 	"github.com/uber/cadence/bench-test/load/common"
 
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/client"
 	"go.uber.org/zap"
 
 	"github.com/pborman/uuid"
@@ -120,7 +120,7 @@ func (l *launcher) workerLoop(routineId int, count int) {
 		ConcurrentCount:  l.config.ConcurrentCount,
 		PayloadSizeBytes: l.config.PayloadSizeBytes,
 	}
-	workflowOptions := cadence.StartWorkflowOptions{
+	workflowOptions := client.StartWorkflowOptions{
 		ExecutionStartToCloseTimeout:    5 * time.Minute,
 		DecisionTaskStartToCloseTimeout: 10 * time.Second,
 	}

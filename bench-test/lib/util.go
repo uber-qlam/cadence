@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 )
 
@@ -63,10 +63,10 @@ const workflowChangeID = "initial"
 // MUST only be called within a workflow function and it MUST
 // be the first line in the workflow function
 // Returns an error if the version is incompatible
-func checkWFVersionCompatibility(ctx cadence.Context) error {
-	version := cadence.GetVersion(ctx, workflowChangeID, workflowVersion, workflowVersion)
+func checkWFVersionCompatibility(ctx workflow.Context) error {
+	version := workflow.GetVersion(ctx, workflowChangeID, workflowVersion, workflowVersion)
 	if version != workflowVersion {
-		cadence.GetLogger(ctx).Error("workflow version mismatch",
+		workflow.GetLogger(ctx).Error("workflow version mismatch",
 			zap.Int("want", int(workflowVersion)), zap.Int("got", int(version)))
 		return fmt.Errorf("workflow version mismatch, want=%v, got=%v", workflowVersion, version)
 	}
@@ -77,7 +77,7 @@ func checkWFVersionCompatibility(ctx cadence.Context) error {
 // It checks for workflow task version compatibility and also records the execution
 // in m3. This function must be the first call in every workflow function
 // Returns metrics scope on success, error on failure
-func BeginWorkflow(ctx cadence.Context, wfType string, scheduledTimeNanos int64) (*workflowMetricsProfile, error) {
+func BeginWorkflow(ctx workflow.Context, wfType string, scheduledTimeNanos int64) (*workflowMetricsProfile, error) {
 	profile := recordWorkflowStart(ctx, wfType, scheduledTimeNanos)
 	if err := checkWFVersionCompatibility(ctx); err != nil {
 		profile.Scope.Counter(errIncompatibleVersion).Inc(1)

@@ -22,14 +22,17 @@ package lib
 
 import (
 	"context"
+
 	"github.com/uber/cadence/bench-test/cadence-client-go/factory"
 
 	//"code.uber.internal/go-common.git/x/tchannel"
-	"go.uber.org/cadence"
-	gen "go.uber.org/cadence/.gen/go/cadence"
-	"go.uber.org/cadence/.gen/go/shared"
+
 	"math/rand"
 	"time"
+
+	"go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
+	"go.uber.org/cadence/.gen/go/shared"
+	"go.uber.org/cadence/client"
 )
 
 const workflowRetentionDays = 1
@@ -39,11 +42,11 @@ const workflowRetentionDays = 1
 // a union of all the client interfaces that
 // the library exposes
 type CadenceClient struct {
-	cadence.Client
+	client.Client
 	// domainClient only exposes domain API
-	cadence.DomainClient
+	client.DomainClient
 	// this low level tchan client is needed to start the workers
-	TChan gen.TChanWorkflowService
+	Service workflowserviceclient.Interface
 }
 
 // createDomain creates a cadence domain with the given name and description
@@ -89,7 +92,7 @@ func NewCadenceClient(runtime *RuntimeContext) (CadenceClient, error) {
 	if err != nil {
 		return CadenceClient{}, err
 	}
-	client.TChan, err = builder.BuildServiceClient()
+	client.Service, err = builder.BuildServiceClient()
 	if err != nil {
 		return CadenceClient{}, err
 	}

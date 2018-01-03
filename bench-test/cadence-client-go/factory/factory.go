@@ -21,12 +21,14 @@
 package factory
 
 import (
+	"log"
+
 	"github.com/pkg/errors"
 	"github.com/uber-go/tally"
-	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/thrift"
-	"go.uber.org/cadence"
-	m "go.uber.org/cadence/.gen/go/cadence"
+	"go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
+	"go.uber.org/cadence/client"
+	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/transport/tchannel"
 )
 
 // Environment is the cadence environment
@@ -49,9 +51,8 @@ const (
 // WorkflowClientBuilder build client to cadence service
 // Use HostPort to connect to a specific host (for oenbox case), or UNSName to connect to cadence server by UNS name.
 type WorkflowClientBuilder struct {
-	tchanClient    thrift.TChanClient
+	dispatcher     *yarpc.Dispatcher
 	hostPort       string
-	needsInitUNS   bool
 	domain         string
 	clientIdentity string
 	metricsScope   tally.Scope
@@ -66,14 +67,6 @@ func NewBuilder() *WorkflowClientBuilder {
 // SetHostPort sets the hostport for the builder
 func (b *WorkflowClientBuilder) SetHostPort(hostport string) *WorkflowClientBuilder {
 	b.hostPort = hostport
-	return b
-}
-
-// SetNeedsInitUNS sets the flag to indicate how to call unsclient.SetParams()
-// If needsInit is true, builder will call unsclient.SetParams for you. If it is false, you are responsible to call it.
-// Default value is false.
-func (b *WorkflowClientBuilder) SetNeedsInitUNS(needsInit bool) *WorkflowClientBuilder {
-	b.needsInitUNS = needsInit
 	return b
 }
 
@@ -102,60 +95,86 @@ func (b *WorkflowClientBuilder) SetEnv(env Environment) *WorkflowClientBuilder {
 }
 
 // BuildCadenceClient builds a client to cadence service
-func (b *WorkflowClientBuilder) BuildCadenceClient() (cadence.Client, error) {
+func (b *WorkflowClientBuilder) BuildCadenceClient() (client.Client, error) {
 	service, err := b.BuildServiceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return cadence.NewClient(
-		service, b.domain, &cadence.ClientOptions{Identity: b.clientIdentity, MetricsScope: b.metricsScope}), nil
+	return client.NewClient(
+		service, b.domain, &client.Options{Identity: b.clientIdentity, MetricsScope: b.metricsScope}), nil
 }
 
 // BuildCadenceDomainClient builds a domain client to cadence service
-func (b *WorkflowClientBuilder) BuildCadenceDomainClient() (cadence.DomainClient, error) {
+func (b *WorkflowClientBuilder) BuildCadenceDomainClient() (client.DomainClient, error) {
 	service, err := b.BuildServiceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return cadence.NewDomainClient(
-		service, &cadence.ClientOptions{Identity: b.clientIdentity, MetricsScope: b.metricsScope}), nil
+	return client.NewDomainClient(
+		service, &client.Options{Identity: b.clientIdentity, MetricsScope: b.metricsScope}), nil
 }
 
 // BuildServiceClient builds a thrift service client to cadence service
-func (b *WorkflowClientBuilder) BuildServiceClient() (m.TChanWorkflowService, error) {
+func (b *WorkflowClientBuilder) BuildServiceClient() (workflowserviceclient.Interface, error) {
 	if err := b.build(); err != nil {
 		return nil, err
 	}
 
-	return m.NewTChanWorkflowServiceClient(b.tchanClient), nil
+	if b.dispatcher == nil {
+		log.Fatalf("No RPC dispatcher provided to create a connection to Cadence Service")
+	}
+
+	serviceName := getServiceName(b.env)
+	return workflowserviceclient.New(b.dispatcher.ClientConfig(serviceName)), nil
 }
 
 func (b *WorkflowClientBuilder) build() error {
-	if b.tchanClient != nil {
+	if b.dispatcher != nil {
 		return nil
 	}
+
 	if len(b.hostPort) <= 0 {
 		return errors.New("HostPort must NOT be empty")
 	}
 
-	var tchan *tchannel.Channel
-	var err error
+	serviceName := getServiceName(b.env)
 
-	tchan, err = tchannel.NewChannel(_cadenceClientName, nil)
-
-	if err != nil {
-		return err
-	}
-
-	var opts *thrift.ClientOptions
 	if len(b.hostPort) > 0 {
-		opts = &thrift.ClientOptions{HostPort: b.hostPort}
+		ch, err := tchannel.NewChannelTransport(
+			tchannel.ServiceName(_cadenceClientName))
+		if err != nil {
+			log.Fatalf("Failed to create transport channel with error: %v", err)
+		}
+
+		b.dispatcher = yarpc.NewDispatcher(yarpc.Config{
+			Name: _cadenceClientName,
+			Outbounds: yarpc.Outbounds{
+				serviceName: {Unary: ch.NewSingleOutbound(b.hostPort)},
+			},
+		})
+	} else {
+		ch, err := tchannel.NewChannelTransport(
+			tchannel.ServiceName(serviceName))
+		if err != nil {
+			log.Fatalf("Failed to create transport channel with error: %v", err)
+		}
+
+		b.dispatcher = yarpc.NewDispatcher(yarpc.Config{
+			Name: _cadenceClientName,
+			Outbounds: yarpc.Outbounds{
+				serviceName: {Unary: ch.NewSingleOutbound(b.hostPort)},
+			},
+		})
 	}
 
-	svc := getServiceName(b.env)
-	b.tchanClient = thrift.NewClient(tchan, svc, opts)
+	if b.dispatcher != nil {
+		if err := b.dispatcher.Start(); err != nil {
+			log.Fatalf("Failed to create outbound transport channel: %v", err)
+		}
+	}
+
 	return nil
 }
 

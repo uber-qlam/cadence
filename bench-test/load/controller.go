@@ -160,10 +160,10 @@ func (c *Controller) stopHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		for _, e := range resp.GetExecutions() {
+		for _, e := range resp.Executions {
 			workerCh <- e.Execution
 		}
-		pageToken = resp.GetNextPageToken()
+		pageToken = resp.NextPageToken
 		if len(pageToken) == 0 {
 			return
 		}

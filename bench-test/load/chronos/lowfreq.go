@@ -26,24 +26,25 @@ import (
 	"time"
 
 	"github.com/uber/cadence/bench-test/lib"
-	"go.uber.org/cadence"
+	"go.uber.org/cadence/activity"
+	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 )
 
 func init() {
-	cadence.RegisterWorkflow(lowFreqTimerWorkflow)
-	cadence.RegisterActivity(lowFreqTimerActivity)
+	workflow.Register(lowFreqTimerWorkflow)
+	activity.Register(lowFreqTimerActivity)
 }
 
-func lowFreqTimerWorkflow(ctx cadence.Context, scheduledTimeNanos int64, freq time.Duration, callback HTTPCallback) error {
+func lowFreqTimerWorkflow(ctx workflow.Context, scheduledTimeNanos int64, freq time.Duration, callback HTTPCallback) error {
 	profile, err := lib.BeginWorkflow(ctx, "workflow.lowfreq", scheduledTimeNanos)
 	if err != nil {
 		return err
 	}
 
-	taskList := cadence.GetWorkflowInfo(ctx).TaskListName
+	taskList := workflow.GetInfo(ctx).TaskListName
 
-	activityOpts := cadence.ActivityOptions{
+	activityOpts := workflow.ActivityOptions{
 		TaskList:               taskList,
 		StartToCloseTimeout:    2*time.Minute + 5*time.Second,
 		ScheduleToStartTimeout: time.Minute,
@@ -51,34 +52,34 @@ func lowFreqTimerWorkflow(ctx cadence.Context, scheduledTimeNanos int64, freq ti
 	}
 
 	for i := 0; i < 10; i++ {
-		aCtx := cadence.WithActivityOptions(ctx, activityOpts)
-		f := cadence.ExecuteActivity(aCtx, lowFreqTimerActivity, cadence.Now(ctx).UnixNano(), callback)
+		aCtx := workflow.WithActivityOptions(ctx, activityOpts)
+		f := workflow.ExecuteActivity(aCtx, lowFreqTimerActivity, workflow.Now(ctx).UnixNano(), callback)
 		f.Get(ctx, nil)
-		start := cadence.Now(ctx)
-		cadence.Sleep(ctx, freq)
-		diff := cadence.Now(ctx).Sub(start)
+		start := workflow.Now(ctx)
+		workflow.Sleep(ctx, freq)
+		diff := workflow.Now(ctx).Sub(start)
 		drift := lib.MaxInt64(0, int64(diff-freq))
 		profile.Scope.Timer(lib.TimerDriftLatency).Record(time.Duration(drift))
 	}
 
 	profile.End(nil)
-	return cadence.NewContinueAsNewError(ctx, lowFreqTimerWorkflow, cadence.Now(ctx).UnixNano(), freq, callback)
+	return workflow.NewContinueAsNewError(ctx, lowFreqTimerWorkflow, workflow.Now(ctx).UnixNano(), freq, callback)
 }
 
 func lowFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, callback HTTPCallback) error {
-	m := cadence.GetActivityMetricsScope(ctx)
+	m := activity.GetMetricsScope(ctx)
 	scope, sw := lib.RecordActivityStart(m, "activity.lowfreq", scheduledTimeNanos)
 	defer sw.Stop()
 
 	cfg := lib.GetActivityServiceConfig(ctx)
 	if cfg == nil {
-		cadence.GetActivityLogger(ctx).Error("context missing service config")
+		activity.GetLogger(ctx).Error("context missing service config")
 		return nil
 	}
 
 	wm := lib.GetActivityWorkerMetrics(ctx)
 	if wm == nil {
-		cadence.GetActivityLogger(ctx).Error("context missing worker metrics")
+		activity.GetLogger(ctx).Error("context missing worker metrics")
 		return nil
 	}
 
@@ -88,7 +89,7 @@ func lowFreqTimerActivity(ctx context.Context, scheduledTimeNanos int64, callbac
 	scope.Counter("callback.invoked").Inc(1)
 	err := callback.invoke(cfg.HTTPListenPort)
 	if err != nil {
-		cadence.GetActivityLogger(ctx).Error("callback.invoke() error",
+		activity.GetLogger(ctx).Error("callback.invoke() error",
 			zap.String("url", callback.URL), zap.Int("port", cfg.HTTPListenPort), zap.Error(err))
 		scope.Counter("callback.errors").Inc(1)
 		return err
