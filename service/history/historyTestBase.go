@@ -79,7 +79,7 @@ type (
 
 	// TestBase wraps the base setup needed to create workflows over engine layer.
 	TestBase struct {
-		persistence.TestBase
+		persistence.CassandraTestBase
 		ShardContext *TestShardContext
 	}
 )
@@ -338,25 +338,25 @@ func (s *TestShardContext) GetCurrentTime(cluster string) time.Time {
 }
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
-func (s *TestBase) SetupWorkflowStoreWithOptions(options persistence.TestBaseOptions) {
-	s.TestBase.SetupWorkflowStoreWithOptions(options, nil)
+func (s *TestBase) SetupWorkflowStoreWithOptions(options persistence.CassandraTestBaseOptions) {
+	s.CassandraTestBase.SetupWorkflowStoreWithOptions(options, nil)
 	log := bark.NewLoggerFromLogrus(log.New())
 	config := NewConfig(dynamicconfig.NewNopCollection(), 1)
 	clusterMetadata := cluster.GetTestClusterMetadata(options.EnableGlobalDomain, options.IsMasterCluster)
 	s.ShardContext = newTestShardContext(s.ShardInfo, 0, s.HistoryMgr, s.WorkflowMgr, s.MetadataManager, clusterMetadata,
 		config, log)
-	s.TestBase.TaskIDGenerator = s.ShardContext
+	s.CassandraTestBase.TaskIDGenerator = s.ShardContext
 }
 
 // SetupWorkflowStore to setup workflow test base
 func (s *TestBase) SetupWorkflowStore() {
-	s.TestBase.SetupWorkflowStore()
+	s.CassandraTestBase.SetupWorkflowStore()
 	log := bark.NewLoggerFromLogrus(log.New())
 	config := NewConfig(dynamicconfig.NewNopCollection(), 1)
 	clusterMetadata := cluster.GetTestClusterMetadata(false, false)
 	s.ShardContext = newTestShardContext(s.ShardInfo, 0, s.HistoryMgr, s.WorkflowMgr, s.MetadataManager, clusterMetadata,
 		config, log)
-	s.TestBase.TaskIDGenerator = s.ShardContext
+	s.CassandraTestBase.TaskIDGenerator = s.ShardContext
 }
 
 // SetupDomains setup the domains used for testing

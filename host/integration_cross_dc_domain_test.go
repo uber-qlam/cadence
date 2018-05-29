@@ -45,7 +45,7 @@ type (
 		// not merely log an error
 		*require.Assertions
 		suite.Suite
-		persistence.TestBase
+		persistence.CassandraTestBase
 		domainName          string
 		foreignDomainName   string
 		mockMessagingClient messaging.Client
@@ -95,7 +95,7 @@ func (s *integrationCrossDCSuite) TearDownTest() {
 func (s *integrationCrossDCSuite) setupTest(enableGlobalDomain bool, isMasterCluster bool) {
 	// Have to define our overridden assertions in the test setup. If we did it earlier, s.T() will return nil
 	s.Assertions = require.New(s.T())
-	options := persistence.TestBaseOptions{}
+	options := persistence.CassandraTestBaseOptions{}
 	options.ClusterHost = "127.0.0.1"
 	options.DropKeySpace = true
 	options.SchemaDir = ".."

@@ -57,6 +57,7 @@ func startHandler(c *cli.Context) {
 		log.Fatal("Config file corrupted.", err)
 	}
 	log.Printf("config=\n%v\n", cfg.String())
+	log.Printf("%t", cfg.UseMysqlPersistence)
 
 	cassCfg := cfg.Cassandra
 	dir, err := os.Getwd()

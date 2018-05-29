@@ -20,17 +20,30 @@
 
 package persistence
 
+import (
+	"github.com/stretchr/testify/suite"
+	"testing"
+)
+
 type (
-	// TestBase contains classes that every persistence implementation should implement and test
-	TestBase struct {
-		ExecutionMgrFactory ExecutionManagerFactory
-		HistoryMgr          HistoryManager
-		MetadataManager     MetadataManager
-		ShardMgr            ShardManager
-		ShardInfo           *ShardInfo
-		TaskMgr             TaskManager
-		TaskIDGenerator     TransferTaskIDGenerator
-		VisibilityMgr       VisibilityManager
-		WorkflowMgr         ExecutionManager
+	mysqlPersistenceSuite struct {
+		suite.Suite
+		TestBase
+	}
+
+	mysqlPersistenceTestBaseOptions struct {
 	}
 )
+
+func TestMysqlPersistenceSuite(t *testing.T) {
+	//s := new(mysqlPersistenceSuite)
+	//suite.Run(t, s)
+}
+
+func (s *mysqlPersistenceSuite) Create(options mysqlPersistenceTestBaseOptions) {
+
+}
+
+func (s *mysqlPersistenceSuite) SetupSuite() {
+	s.Create(mysqlPersistenceTestBaseOptions{})
+}

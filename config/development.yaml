@@ -5,6 +5,9 @@ cassandra:
   consistency: "One"
   numHistoryShards: 4
 
+mysql:
+  hosts: "127.0.0.1"
+
 ringpop:
   name: cadence
   bootstrapMode: hosts
@@ -53,3 +56,5 @@ clustersInfo:
   clusterInitialFailoverVersion:
     active: 0
     standby: 1
+
+useMysqlPersistence: true

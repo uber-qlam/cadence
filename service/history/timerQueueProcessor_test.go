@@ -42,7 +42,7 @@ import (
 type (
 	timerQueueProcessorSuite struct {
 		suite.Suite
-		TestBase
+		TestBase       // TODO: this is a historyTestBase.TestBase, not (directly) a persistence.CassandraTestBase, and definitely not a persistence.TestBase
 		engineImpl     *historyEngineImpl
 		matchingClient matching.Client
 		shardClosedCh  chan int

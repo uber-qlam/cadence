@@ -44,6 +44,10 @@ type (
 		Services map[string]Service `yaml:"services"`
 		// Kafka is the config for connecting to kafka
 		Kafka messaging.KafkaConfig `yaml:"kafka"`
+		// Mysql is the config for connecting to mysql
+		Mysql Mysql `yaml:"mysql"`
+		// Whether or not to use MySQL-backed persistence
+		UseMysqlPersistence bool `yaml:"useMysqlPersistence"`
 	}
 
 	// Service contains the service specific config items
@@ -110,6 +114,12 @@ type (
 		Datacenter string `yaml:"datacenter"`
 		// NumHistoryShards is the desired number of history shards
 		NumHistoryShards int `yaml:"numHistoryShards" validate:"nonzero"`
+	}
+
+	// Mysql contains configuration to connect to the Mysql database
+	Mysql struct {
+		// Hosts is a csv of MySQL data source names
+		Hosts string `yaml:"hosts" validate:"nonzero"`
 	}
 
 	// Replicator describes the configuration of replicator

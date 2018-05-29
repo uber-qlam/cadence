@@ -59,7 +59,7 @@ type (
 	}
 
 	testCluster struct {
-		persistence.TestBase
+		persistence.CassandraTestBase
 		host   host.Cadence
 		engine wsc.Interface
 		logger bark.Logger
@@ -109,7 +109,7 @@ func (s *integrationClustersTestSuite) newTestCluster(no int) *testCluster {
 }
 
 func (s *testCluster) setupCluster(no int) {
-	options := persistence.TestBaseOptions{}
+	options := persistence.CassandraTestBaseOptions{}
 	options.ClusterHost = "127.0.0.1"
 	options.KeySpace = "integration_" + clusterName[no]
 	options.DropKeySpace = true

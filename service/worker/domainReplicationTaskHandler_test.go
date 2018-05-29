@@ -38,7 +38,7 @@ import (
 type (
 	domainReplicatorSuite struct {
 		suite.Suite
-		persistence.TestBase
+		persistence.CassandraTestBase
 		domainReplicator *domainReplicatorImpl
 	}
 )
