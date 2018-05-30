@@ -20,27 +20,35 @@
 
 package persistence
 
+import (
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"os"
+	"testing"
+)
+
 type (
-	// TestBase contains classes that every persistence implementation should implement and test
-	TestBase struct {
-		ExecutionMgrFactory ExecutionManagerFactory
-		HistoryMgr          HistoryManager
-		MetadataManager     MetadataManager
-		ShardMgr            ShardManager
-		ShardInfo           *ShardInfo
-		TaskMgr             TaskManager
-		TaskIDGenerator     TransferTaskIDGenerator
-		VisibilityMgr       VisibilityManager
-		WorkflowMgr         ExecutionManager
+	mysqlMetadataPersistenceSuite struct {
+		suite.Suite
+		TestBase
+		*require.Assertions
 	}
 )
 
-// SetupWorkflowStore sets up the work flow store ???????
-func (s *TestBase) SetupWorkflowStore() {
-	s.MetadataManager, _ = NewMysqlMetadataPersistence()
+func TestMysqlMetadataPersistenceSuite(t *testing.T) {
+	s := new(mysqlMetadataPersistenceSuite)
+	suite.Run(t, s)
 }
 
-// TearDownWorkflowStore cleans up
-func (s *TestBase) TearDownWorkflowStore() {
+func (m *mysqlMetadataPersistenceSuite) SetupSuite() {
+	if testing.Verbose() {
+		log.SetOutput(os.Stdout)
+	}
 
+	m.SetupWorkflowStore()
+}
+
+func (m *mysqlMetadataPersistenceSuite) TearDownSuite() {
+	m.TearDownWorkflowStore()
 }

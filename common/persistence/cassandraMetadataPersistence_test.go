@@ -34,7 +34,7 @@ import (
 )
 
 type (
-	metadataPersistenceSuite struct {
+	cassandraMetadataPersistenceSuite struct {
 		suite.Suite
 		CassandraTestBase
 		// override suite.Suite.Assertions with require.Assertions; this means that s.NotNil(nil) will stop the test,
@@ -43,12 +43,12 @@ type (
 	}
 )
 
-func TestMetadataPersistenceSuite(t *testing.T) {
-	s := new(metadataPersistenceSuite)
+func TestCassandraMetadataPersistenceSuite(t *testing.T) {
+	s := new(cassandraMetadataPersistenceSuite)
 	suite.Run(t, s)
 }
 
-func (m *metadataPersistenceSuite) SetupSuite() {
+func (m *cassandraMetadataPersistenceSuite) SetupSuite() {
 	if testing.Verbose() {
 		log.SetOutput(os.Stdout)
 	}
@@ -56,16 +56,16 @@ func (m *metadataPersistenceSuite) SetupSuite() {
 	m.SetupWorkflowStore()
 }
 
-func (m *metadataPersistenceSuite) SetupTest() {
+func (m *cassandraMetadataPersistenceSuite) SetupTest() {
 	// Have to define our overridden assertions in the test setup. If we did it earlier, s.T() will return nil
 	m.Assertions = require.New(m.T())
 }
 
-func (m *metadataPersistenceSuite) TearDownSuite() {
+func (m *cassandraMetadataPersistenceSuite) TearDownSuite() {
 	m.TearDownWorkflowStore()
 }
 
-func (m *metadataPersistenceSuite) TestCreateDomain() {
+func (m *cassandraMetadataPersistenceSuite) TestCreateDomain() {
 	id := uuid.New()
 	name := "create-domain-test-name"
 	status := DomainStatusRegistered
@@ -141,7 +141,7 @@ func (m *metadataPersistenceSuite) TestCreateDomain() {
 	m.Nil(resp2)
 }
 
-func (m *metadataPersistenceSuite) TestGetDomain() {
+func (m *cassandraMetadataPersistenceSuite) TestGetDomain() {
 	id := uuid.New()
 	name := "get-domain-test-name"
 	status := DomainStatusRegistered
@@ -239,7 +239,7 @@ func (m *metadataPersistenceSuite) TestGetDomain() {
 	m.Nil(resp4)
 }
 
-func (m *metadataPersistenceSuite) TestUpdateDomain() {
+func (m *cassandraMetadataPersistenceSuite) TestUpdateDomain() {
 	id := uuid.New()
 	name := "update-domain-test-name"
 	status := DomainStatusRegistered
@@ -368,7 +368,7 @@ func (m *metadataPersistenceSuite) TestUpdateDomain() {
 	m.Equal(resp2.DBVersion+1, resp5.DBVersion)
 }
 
-func (m *metadataPersistenceSuite) TestDeleteDomain() {
+func (m *cassandraMetadataPersistenceSuite) TestDeleteDomain() {
 	id := uuid.New()
 	name := "delete-domain-test-name"
 	status := DomainStatusRegistered
@@ -468,7 +468,7 @@ func (m *metadataPersistenceSuite) TestDeleteDomain() {
 	m.Nil(resp9)
 }
 
-func (m *metadataPersistenceSuite) CreateDomain(info *DomainInfo, config *DomainConfig,
+func (m *cassandraMetadataPersistenceSuite) CreateDomain(info *DomainInfo, config *DomainConfig,
 	replicationConfig *DomainReplicationConfig, isGlobaldomain bool, configVersion int64, failoverVersion int64) (*CreateDomainResponse, error) {
 	return m.MetadataManager.CreateDomain(&CreateDomainRequest{
 		Info:              info,
@@ -480,14 +480,14 @@ func (m *metadataPersistenceSuite) CreateDomain(info *DomainInfo, config *Domain
 	})
 }
 
-func (m *metadataPersistenceSuite) GetDomain(id, name string) (*GetDomainResponse, error) {
+func (m *cassandraMetadataPersistenceSuite) GetDomain(id, name string) (*GetDomainResponse, error) {
 	return m.MetadataManager.GetDomain(&GetDomainRequest{
 		ID:   id,
 		Name: name,
 	})
 }
 
-func (m *metadataPersistenceSuite) UpdateDomain(info *DomainInfo, config *DomainConfig, replicationConfig *DomainReplicationConfig,
+func (m *cassandraMetadataPersistenceSuite) UpdateDomain(info *DomainInfo, config *DomainConfig, replicationConfig *DomainReplicationConfig,
 	configVersion int64, failoverVersion int64, dbVersion int64) error {
 	return m.MetadataManager.UpdateDomain(&UpdateDomainRequest{
 		Info:              info,
@@ -499,7 +499,7 @@ func (m *metadataPersistenceSuite) UpdateDomain(info *DomainInfo, config *Domain
 	})
 }
 
-func (m *metadataPersistenceSuite) DeleteDomain(id, name string) error {
+func (m *cassandraMetadataPersistenceSuite) DeleteDomain(id, name string) error {
 	if len(id) > 0 {
 		return m.MetadataManager.DeleteDomain(&DeleteDomainRequest{ID: id})
 	}

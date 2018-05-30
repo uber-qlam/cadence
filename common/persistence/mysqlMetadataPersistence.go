@@ -21,26 +21,35 @@
 package persistence
 
 type (
-	// TestBase contains classes that every persistence implementation should implement and test
-	TestBase struct {
-		ExecutionMgrFactory ExecutionManagerFactory
-		HistoryMgr          HistoryManager
-		MetadataManager     MetadataManager
-		ShardMgr            ShardManager
-		ShardInfo           *ShardInfo
-		TaskMgr             TaskManager
-		TaskIDGenerator     TransferTaskIDGenerator
-		VisibilityMgr       VisibilityManager
-		WorkflowMgr         ExecutionManager
+	mysqlMetadataManager struct {
 	}
 )
 
-// SetupWorkflowStore sets up the work flow store ???????
-func (s *TestBase) SetupWorkflowStore() {
-	s.MetadataManager, _ = NewMysqlMetadataPersistence()
+func (m *mysqlMetadataManager) Close() {
+	panic("implement me")
 }
 
-// TearDownWorkflowStore cleans up
-func (s *TestBase) TearDownWorkflowStore() {
+func (m *mysqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
+	panic("implement me")
+}
 
+func (m *mysqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
+	panic("implement me")
+}
+
+func (m *mysqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
+	panic("implement me")
+}
+
+func (m *mysqlMetadataManager) DeleteDomain(request *DeleteDomainRequest) error {
+	panic("implement me")
+}
+
+func (m *mysqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameRequest) error {
+	panic("implement me")
+}
+
+// NewMysqlMetadataPersistence creates an instance of mysqlMetadataManager
+func NewMysqlMetadataPersistence() (MetadataManager, error) {
+	return &mysqlMetadataManager{}, nil
 }
