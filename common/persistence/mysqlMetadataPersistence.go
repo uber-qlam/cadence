@@ -30,7 +30,7 @@ func (m *mysqlMetadataManager) Close() {
 }
 
 func (m *mysqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (m *mysqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
