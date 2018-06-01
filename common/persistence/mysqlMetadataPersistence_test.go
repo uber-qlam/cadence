@@ -23,43 +23,21 @@ package persistence
 import (
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/uber/cadence/common/cluster"
-	"os"
-	"testing"
-
 	gen "github.com/uber/cadence/.gen/go/shared"
+	"github.com/uber/cadence/common/cluster"
+	"testing"
 )
 
 type (
 	mysqlMetadataPersistenceSuite struct {
-		suite.Suite
 		TestBase
-		*require.Assertions
 	}
 )
 
 func TestMysqlMetadataPersistenceSuite(t *testing.T) {
 	s := new(mysqlMetadataPersistenceSuite)
 	suite.Run(t, s)
-}
-
-func (m *mysqlMetadataPersistenceSuite) SetupSuite() {
-	if testing.Verbose() {
-		log.SetOutput(os.Stdout)
-	}
-
-	m.SetupWorkflowStore()
-}
-
-func (m *mysqlMetadataPersistenceSuite) SetupTest() {
-	// Have to define our overridden assertions in the test setup. If we did it earlier, s.T() will return nil
-	m.Assertions = require.New(m.T())
-}
-
-func (m *mysqlMetadataPersistenceSuite) TearDownSuite() {
-	m.TearDownWorkflowStore()
 }
 
 func (m *mysqlMetadataPersistenceSuite) TestCreateDomain() {
@@ -74,7 +52,7 @@ func (m *mysqlMetadataPersistenceSuite) TestCreateDomain() {
 	configVersion := int64(0)
 	failoverVersion := int64(0)
 
-	resp0, err0 := m.CreateDomain(
+	resp0, err0 := m.createDomain(
 		&DomainInfo{
 			ID:          id,
 			Name:        name,
@@ -116,7 +94,7 @@ func (m *mysqlMetadataPersistenceSuite) TestCreateDomain() {
 	m.True(resp1.ReplicationConfig.Clusters[0].ClusterName == cluster.TestCurrentClusterName)
 	m.Equal(int64(0), resp1.DBVersion)
 
-	resp2, err2 := m.CreateDomain(
+	resp2, err2 := m.createDomain(
 		&DomainInfo{
 			ID:          uuid.New(),
 			Name:        name,
@@ -138,7 +116,7 @@ func (m *mysqlMetadataPersistenceSuite) TestCreateDomain() {
 	m.Nil(resp2)
 }
 
-func (m *mysqlMetadataPersistenceSuite) CreateDomain(info *DomainInfo, config *DomainConfig,
+func (m *mysqlMetadataPersistenceSuite) createDomain(info *DomainInfo, config *DomainConfig,
 	replicationConfig *DomainReplicationConfig, isGlobalDomain bool, configVersion int64, failoverVersion int64) (*CreateDomainResponse, error) {
 	return m.MetadataManager.CreateDomain(&CreateDomainRequest{
 		Info:              info,
@@ -155,4 +133,19 @@ func (m *mysqlMetadataPersistenceSuite) GetDomain(id, name string) (*GetDomainRe
 		ID:   id,
 		Name: name,
 	})
+}
+
+// SetupWorkflowStore sets up the work flow store ???????
+func (m *TestBase) setupWorkflowStore() {
+	var err error
+	m.MetadataManager, err = NewMysqlMetadataPersistence()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// TearDownWorkflowStore cleans up
+func (m *TestBase) tearDownWorkflowStore() {
+
 }

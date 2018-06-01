@@ -810,7 +810,7 @@ type (
 		FailoverVersion   int64
 	}
 
-	// CreateDomainResponse is the response for CreateDomain
+	// CreateDomainResponse is the response for createDomain
 	CreateDomainResponse struct {
 		ID string
 	}

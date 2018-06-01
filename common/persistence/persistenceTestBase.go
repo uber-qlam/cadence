@@ -21,10 +21,19 @@
 package persistence
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"log"
+	"os"
+	"testing"
 )
 
 type (
+	storeManager interface {
+		setupWorkflowStore()
+		tearDownWorkflowStore()
+	}
+
 	// TestBase contains classes that every persistence implementation should implement and test
 	TestBase struct {
 		ExecutionMgrFactory ExecutionManagerFactory
@@ -36,20 +45,25 @@ type (
 		TaskIDGenerator     TransferTaskIDGenerator
 		VisibilityMgr       VisibilityManager
 		WorkflowMgr         ExecutionManager
+
+		suite.Suite
+		*require.Assertions
+		storeManager
 	}
 )
 
-// SetupWorkflowStore sets up the work flow store ???????
-func (s *TestBase) SetupWorkflowStore() {
-	var err error
-	s.MetadataManager, err = NewMysqlMetadataPersistence()
-
-	if err != nil {
-		log.Fatal(err)
+func (b *TestBase) SetupSuite() {
+	if testing.Verbose() {
+		log.SetOutput(os.Stdout)
 	}
+	b.setupWorkflowStore()
 }
 
-// TearDownWorkflowStore cleans up
-func (s *TestBase) TearDownWorkflowStore() {
+func (b *TestBase) SetupTest() {
+	// Have to define our overridden assertions in the test setup. If we did it earlier, s.T() will return nil
+	b.Assertions = require.New(b.T())
+}
 
+func (b *TestBase) TearDownSuite() {
+	b.tearDownWorkflowStore()
 }

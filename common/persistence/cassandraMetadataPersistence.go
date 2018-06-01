@@ -133,7 +133,7 @@ func (m *cassandraMetadataPersistence) Close() {
 func (m *cassandraMetadataPersistence) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
 	if err := m.session.Query(templateCreateDomainQuery, request.Info.ID, request.Info.Name).Exec(); err != nil {
 		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateDomain operation failed. Inserting into domains table. Error: %v", err),
+			Message: fmt.Sprintf("createDomain operation failed. Inserting into domains table. Error: %v", err),
 		}
 	}
 
@@ -158,7 +158,7 @@ func (m *cassandraMetadataPersistence) CreateDomain(request *CreateDomainRequest
 
 	if err != nil {
 		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateDomain operation failed. Inserting into domains_by_name table. Error: %v", err),
+			Message: fmt.Sprintf("createDomain operation failed. Inserting into domains_by_name table. Error: %v", err),
 		}
 	}
 
@@ -176,7 +176,7 @@ func (m *cassandraMetadataPersistence) CreateDomain(request *CreateDomainRequest
 		}
 
 		return nil, &workflow.DomainAlreadyExistsError{
-			Message: fmt.Sprintf("CreateDomain operation failed because of conditional failure."),
+			Message: fmt.Sprintf("createDomain operation failed because of conditional failure."),
 		}
 	}
 
