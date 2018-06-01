@@ -139,12 +139,12 @@ func (m *mysqlMetadataPersistenceSuite) TestCreateDomain() {
 }
 
 func (m *mysqlMetadataPersistenceSuite) CreateDomain(info *DomainInfo, config *DomainConfig,
-	replicationConfig *DomainReplicationConfig, isGlobaldomain bool, configVersion int64, failoverVersion int64) (*CreateDomainResponse, error) {
+	replicationConfig *DomainReplicationConfig, isGlobalDomain bool, configVersion int64, failoverVersion int64) (*CreateDomainResponse, error) {
 	return m.MetadataManager.CreateDomain(&CreateDomainRequest{
 		Info:              info,
 		Config:            config,
 		ReplicationConfig: replicationConfig,
-		IsGlobalDomain:    isGlobaldomain,
+		IsGlobalDomain:    isGlobalDomain,
 		ConfigVersion:     configVersion,
 		FailoverVersion:   failoverVersion,
 	})

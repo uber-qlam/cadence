@@ -20,9 +20,37 @@
 
 package persistence
 
+import (
+	"fmt"
+	_ "github.com/go-sql-driver/mysql" // MySQL driver
+	"github.com/jmoiron/sqlx"
+
+	workflow "github.com/uber/cadence/.gen/go/shared"
+)
+
 type (
 	mysqlMetadataManager struct {
+		db *sqlx.DB
 	}
+)
+
+const (
+	templateCreateDomainSqlQuery = `INSERT INTO domains (` +
+		`id,` +
+		`retention, emit_metric,` +
+		`config_version,` +
+		`name, status, description, owner_email,` +
+		`failover_version, is_global_domain,` +
+		`active_cluster_name, clusters` +
+		`)` +
+		`VALUES(` +
+		`:id,` +
+		`:retention, :emit_metric,` +
+		`:config_version,` +
+		`:name, :status, :description, :owner_email,` +
+		`:failover_version, :is_global_domain,` +
+		`:active_cluster_name, :clusters` +
+		`)`
 )
 
 func (m *mysqlMetadataManager) Close() {
@@ -30,11 +58,44 @@ func (m *mysqlMetadataManager) Close() {
 }
 
 func (m *mysqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
-	return nil, nil
+	tx, err1 := m.db.Beginx()
+	if err1 != nil {
+		return nil, err1
+	}
+
+	if _, err2 := tx.NamedExec(templateCreateDomainSqlQuery, map[string]interface{}{
+		"id":                  request.Info.ID,
+		"retention":           request.Config.Retention,
+		"emit_metric":         request.Config.EmitMetric,
+		"config_version":      request.ConfigVersion,
+		"name":                request.Info.Name,
+		"status":              request.Info.Status,
+		"description":         request.Info.Description,
+		"owner_email":         request.Info.OwnerEmail,
+		"failover_version":    request.FailoverVersion,
+		"is_global_domain":    request.IsGlobalDomain,
+		"active_cluster_name": request.ReplicationConfig.ActiveClusterName,
+		"clusters":            false, // TO BE IMPLEMENTED
+	}); err2 != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateDomain operation failed. Inserting into domains table. Error: %v", err2),
+		}
+	}
+
+	if err3 := tx.Commit(); err3 != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateDomain operation failed. Committing. Error: %v", err3),
+		}
+	}
+
+	return &CreateDomainResponse{ID: request.Info.ID}, nil
 }
 
 func (m *mysqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
-	panic("implement me")
+	return nil, nil
+	//return &GetDomainResponse{
+	//	Info: request // this Info object has to go from CreateDomain -> ... -> and back out as a response
+	//}, nil
 }
 
 func (m *mysqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
@@ -51,5 +112,12 @@ func (m *mysqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameReq
 
 // NewMysqlMetadataPersistence creates an instance of mysqlMetadataManager
 func NewMysqlMetadataPersistence() (MetadataManager, error) {
-	return &mysqlMetadataManager{}, nil
+	var db, err = sqlx.Connect("mysql", "uber:uber@tcp(127.0.0.1:3306)/catalyst_test")
+	if err != nil {
+		return nil, err
+	}
+
+	return &mysqlMetadataManager{
+		db: db,
+	}, nil
 }

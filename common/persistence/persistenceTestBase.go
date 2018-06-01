@@ -20,6 +20,10 @@
 
 package persistence
 
+import (
+	log "github.com/sirupsen/logrus"
+)
+
 type (
 	// TestBase contains classes that every persistence implementation should implement and test
 	TestBase struct {
@@ -37,7 +41,12 @@ type (
 
 // SetupWorkflowStore sets up the work flow store ???????
 func (s *TestBase) SetupWorkflowStore() {
-	s.MetadataManager, _ = NewMysqlMetadataPersistence()
+	var err error
+	s.MetadataManager, err = NewMysqlMetadataPersistence()
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // TearDownWorkflowStore cleans up
