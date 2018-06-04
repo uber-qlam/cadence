@@ -84,6 +84,7 @@ type (
 		readLevel            int64
 		replicationReadLevel int64
 		CassandraTestCluster
+		UseMysql bool
 	}
 
 	// CassandraTestCluster allows executing cassandra operations in testing.
@@ -111,83 +112,95 @@ func (g *testTransferTaskIDGenerator) GetNextTransferTaskID() (int64, error) {
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
 func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metadata cluster.Metadata) {
-	log := bark.NewLoggerFromLogrus(log.New())
+	if !s.UseMysql {
+		log := bark.NewLoggerFromLogrus(log.New())
 
-	if metadata == nil {
-		s.ClusterMetadata = cluster.GetTestClusterMetadata(
-			options.EnableGlobalDomain,
-			options.IsMasterCluster,
-		)
+		if metadata == nil {
+			s.ClusterMetadata = cluster.GetTestClusterMetadata(
+				options.EnableGlobalDomain,
+				options.IsMasterCluster,
+			)
+		} else {
+			s.ClusterMetadata = metadata
+			log = log.WithField("Cluster", metadata.GetCurrentClusterName())
+		}
+		currentClusterName := s.ClusterMetadata.GetCurrentClusterName()
+
+		// Setup Workflow keyspace and deploy schema for tests
+		s.CassandraTestCluster.setupTestCluster(options)
+		shardID := 0
+		var err error
+		s.ShardMgr, err = NewCassandraShardPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s.ExecutionMgrFactory, err = NewCassandraPersistenceClientFactory(options.ClusterHost, options.ClusterPort,
+			options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Create an ExecutionManager for the shard for use in unit tests
+		s.WorkflowMgr, err = s.ExecutionMgrFactory.CreateExecutionManager(shardID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s.TaskMgr, err = NewCassandraTaskPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace,
+			log)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.HistoryMgr, err = NewCassandraHistoryPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.MetadataManager, err = NewCassandraMetadataPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.VisibilityMgr, err = NewCassandraVisibilityPersistence(options.ClusterHost, options.ClusterPort,
+			options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, log)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.TaskIDGenerator = &testTransferTaskIDGenerator{}
+
+		// Create a shard for test
+		s.readLevel = 0
+		s.replicationReadLevel = 0
+		s.ShardInfo = &ShardInfo{
+			ShardID:                 shardID,
+			RangeID:                 0,
+			TransferAckLevel:        0,
+			ReplicationAckLevel:     0,
+			TimerAckLevel:           time.Time{},
+			ClusterTimerAckLevel:    map[string]time.Time{currentClusterName: time.Time{}},
+			ClusterTransferAckLevel: map[string]int64{currentClusterName: 0},
+		}
+
+		err1 := s.ShardMgr.CreateShard(&CreateShardRequest{
+			ShardInfo: s.ShardInfo,
+		})
+		if err1 != nil {
+			log.Fatal(err1)
+		}
 	} else {
-		s.ClusterMetadata = metadata
-		log = log.WithField("Cluster", metadata.GetCurrentClusterName())
-	}
-	currentClusterName := s.ClusterMetadata.GetCurrentClusterName()
-
-	// Setup Workflow keyspace and deploy schema for tests
-	s.CassandraTestCluster.setupTestCluster(options)
-	shardID := 0
-	var err error
-	s.ShardMgr, err = NewCassandraShardPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
-		options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.ExecutionMgrFactory, err = NewCassandraPersistenceClientFactory(options.ClusterHost, options.ClusterPort,
-		options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Create an ExecutionManager for the shard for use in unit tests
-	s.WorkflowMgr, err = s.ExecutionMgrFactory.CreateExecutionManager(shardID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.TaskMgr, err = NewCassandraTaskPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
-		options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace,
-		log)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s.HistoryMgr, err = NewCassandraHistoryPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
-		options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s.MetadataManager, err = NewCassandraMetadataPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
-		options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s.VisibilityMgr, err = NewCassandraVisibilityPersistence(options.ClusterHost, options.ClusterPort,
-		options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, log)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
-
-	// Create a shard for test
-	s.readLevel = 0
-	s.replicationReadLevel = 0
-	s.ShardInfo = &ShardInfo{
-		ShardID:                 shardID,
-		RangeID:                 0,
-		TransferAckLevel:        0,
-		ReplicationAckLevel:     0,
-		TimerAckLevel:           time.Time{},
-		ClusterTimerAckLevel:    map[string]time.Time{currentClusterName: time.Time{}},
-		ClusterTransferAckLevel: map[string]int64{currentClusterName: 0},
-	}
-
-	err1 := s.ShardMgr.CreateShard(&CreateShardRequest{
-		ShardInfo: s.ShardInfo,
-	})
-	if err1 != nil {
-		log.Fatal(err1)
+		var err error
+		s.MetadataManager, err = NewMysqlMetadataPersistence("uber",
+			"uber",
+			"localhost",
+			"3306",
+			"catalyst_test")
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -990,7 +1003,23 @@ func (s *TestBase) SetupWorkflowStore() {
 
 // TearDownWorkflowStore to cleanup
 func (s *TestBase) TearDownWorkflowStore() {
-	s.CassandraTestCluster.tearDownTestCluster()
+	// Below has no effect:
+	//s.MetadataManager.Close()
+
+	if s.UseMysql {
+		// Below causes hang:
+		//log.Info("got em 1")
+		//if db, err := sqlx.Connect("mysql",
+		//	"uber:uber@tcp(localhost:3306)/catalyst_test"); err == nil {
+		//	log.Info("got em 2")
+		//	db.Exec("truncate table domains")
+		//	db.Close()
+		//} else {
+		//	log.Fatal(err)
+		//}
+	} else {
+		s.CassandraTestCluster.tearDownTestCluster()
+	}
 }
 
 // GetNextSequenceNumber generates a unique sequence number for can be used for transfer queue taskId
