@@ -48,6 +48,8 @@ import:
 - package: github.com/uber-go/kafka-client
   version: ^0.1.7
 
+# TODO: add jmoiron/sqlx and go-mysql-driver/mysql
+
 # Added excludeDirs to prevent build from failing on the yarpc generated code.
 excludeDirs:
   - .gen

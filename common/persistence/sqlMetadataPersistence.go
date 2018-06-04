@@ -61,7 +61,8 @@ const (
 		:domain_replication_config_active_cluster_name, :domain_replication_config_clusters
 		)`
 
-	templateGetDomainSqlQuery = `SELECT * FROM domains WHERE id = :id`
+	templateGetDomainByIdSqlQuery = `SELECT * FROM domains WHERE id = :id`
+	templateGetDomainByNameSqlQuery = `SELECT * FROM domains WHERE name = :name`
 )
 
 func (m *sqlMetadataManager) Close() {
@@ -71,55 +72,88 @@ func (m *sqlMetadataManager) Close() {
 }
 
 func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
-	tx, err1 := m.db.Beginx()
-	if err1 != nil {
-		return nil, err1
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return nil, err
 	}
+	defer tx.Rollback()
 
-	if _, err2 := tx.NamedExec(templateCreateDomainSqlQuery, &FlatCreateDomainRequest{
-		DomainInfo:   *(request.Info),
-		DomainConfig: *(request.Config),
-		// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
-		// TODO DomainReplicationConfig.Clusters
+	// Disallow creating more than one domain with the same name, even if the UUID is different.
+	_, err = m.GetDomain(&GetDomainRequest{Name: request.Info.Name})
+	switch err.(type) {
+	case *workflow.EntityNotExistsError:
+		print("made the thing")
+		// Domain does not already exist. Create it.
 
-		//DomainReplicationConfig: *(request.ReplicationConfig),
-		ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
-		Clusters:          false,
+		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &FlatCreateDomainRequest{
+			DomainInfo:   *(request.Info),
+			DomainConfig: *(request.Config),
+			// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
+			// TODO DomainReplicationConfig.Clusters
 
-		// TODO
+			//DomainReplicationConfig: *(request.ReplicationConfig),
+			ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
+			Clusters:          false,
 
-		IsGlobalDomain:  request.IsGlobalDomain,
-		ConfigVersion:   request.ConfigVersion,
-		FailoverVersion: request.FailoverVersion,
-	}); err2 != nil {
+			// TODO
+
+			IsGlobalDomain:  request.IsGlobalDomain,
+			ConfigVersion:   request.ConfigVersion,
+			FailoverVersion: request.FailoverVersion,
+		}); err != nil {
+			print(err.Error())
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("CreateDomain operation failed. Inserting into domains table. Error: %v", err),
+			}
+		}
+
+		tx.Commit()
+		return &CreateDomainResponse{ID: request.Info.ID}, nil
+
+	case nil:
+		// The domain already exists.
+		return nil, &workflow.DomainAlreadyExistsError{
+			Message: fmt.Sprintf("Domain already exists.  DomainId: %v", request.Info.ID),
+		}
+
+	default:
+		print("default")
+		print(err.Error())
 		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("createDomain operation failed. Inserting into domains table. Error: %v", err2),
+			Message: fmt.Sprintf(
+					"CreateDomain operation failed. Could not check if domain already existed. Error: %v", err),
 		}
 	}
-
-	if err3 := tx.Commit(); err3 != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("createDomain operation failed. Committing. Error: %v", err3),
-		}
-	}
-
-	return &CreateDomainResponse{ID: request.Info.ID}, nil
 }
 
 func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
-	rows, err := m.db.NamedQuery(templateGetDomainSqlQuery, map[string]interface{}{
-		"id": request.ID,
-	})
+	var rows *sqlx.Rows
+	var err error
+
+	if len(request.Name) > 0 {
+		rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, map[string]interface{}{
+			"name": request.Name,
+		})
+	} else if len(request.ID) > 0 {
+		rows, err = m.db.NamedQuery(templateGetDomainByIdSqlQuery, map[string]interface{}{
+			"id": request.ID,
+		})
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
 	for rows.Next() {
+		// Since IDs/names are unique, there should only be one row as a result, and we should be able to return.
+
 		result := make(map[string]interface{})
 		err2 := rows.MapScan(result)
 		if err2 != nil {
 			return nil, err2
 		}
+		// Done with the rows, since there was only one.
+		rows.Close()
 
 		// int to bool conversions
 		int2bool := func(key string) bool {
@@ -128,8 +162,6 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 			}
 			return false
 		}
-
-		rows.Close()
 
 		return &GetDomainResponse{
 			Info: &DomainInfo{
@@ -161,8 +193,16 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 		}, nil
 	}
 
-	// TODO fix me
-	return nil, nil
+	fmt.Printf("could nto find id %s", request.Name)
+	// We did not return in the above for-loop because there were no rows.
+	identity := request.Name
+	if len(request.ID) > 0 {
+		identity = request.ID
+	}
+
+	return nil, &workflow.EntityNotExistsError{
+		Message: fmt.Sprintf("Domain %s does not exist.", identity),
+	}
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
