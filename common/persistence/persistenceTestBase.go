@@ -36,6 +36,7 @@ import (
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uber-common/bark"
+	"github.com/jmoiron/sqlx"
 )
 
 const (
@@ -1054,20 +1055,16 @@ func (s *TestBase) SetupWorkflowStore() {
 
 // TearDownWorkflowStore to cleanup
 func (s *TestBase) TearDownWorkflowStore() {
-	// Below has no effect:
-	//s.MetadataManager.Close()
-
 	if s.UseMysql {
-		// Below causes hang:
-		//log.Info("got em 1")
-		//if db, err := sqlx.Connect("mysql",
-		//	"uber:uber@tcp(localhost:3306)/catalyst_test"); err == nil {
-		//	log.Info("got em 2")
-		//	db.Exec("truncate table domains")
-		//	db.Close()
-		//} else {
-		//	log.Fatal(err)
-		//}
+		log.Info("got em 1")
+		if db, err := sqlx.Connect("mysql",
+			"uber:uber@tcp(localhost:3306)/catalyst_test"); err == nil {
+			log.Info("got em 2")
+			db.Exec("truncate table domains")
+			db.Close()
+		} else {
+			log.Fatal(err)
+		}
 	} else {
 		s.CassandraTestCluster.tearDownTestCluster()
 	}
