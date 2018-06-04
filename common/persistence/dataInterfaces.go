@@ -790,24 +790,24 @@ type (
 
 	// DomainInfo describes the domain entity
 	DomainInfo struct {
-		ID          string
-		Name        string
-		Status      int
-		Description string
-		OwnerEmail  string
+		ID          string `db:"domain_info_id"`
+		Name        string `db:"domain_info_name"`
+		Status      int    `db:"domain_info_status"`
+		Description string `db:"domain_info_description"`
+		OwnerEmail  string `db:"domain_info_owner_email"`
 	}
 
 	// DomainConfig describes the domain configuration
 	DomainConfig struct {
 		// NOTE: this retention is in days, not in seconds
-		Retention  int32
-		EmitMetric bool
+		Retention  int32 `db:"domain_config_retention"`
+		EmitMetric bool  `db:"domain_config_emit_metric"`
 	}
 
 	// DomainReplicationConfig describes the cross DC domain replication configuration
 	DomainReplicationConfig struct {
-		ActiveClusterName string
-		Clusters          []*ClusterReplicationConfig
+		ActiveClusterName string                      `db:"domain_replication_config_active_cluster_name"'`
+		Clusters          []*ClusterReplicationConfig `db:"domain_replication_config_clusters"`
 	}
 
 	// ClusterReplicationConfig describes the cross DC cluster replication configuration
@@ -823,6 +823,18 @@ type (
 		IsGlobalDomain    bool
 		ConfigVersion     int64
 		FailoverVersion   int64
+	}
+
+	// FlatCreateDomainRequest is a flattened version of CreateDomainRequest
+	FlatCreateDomainRequest struct {
+		DomainInfo
+		DomainConfig
+		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
+		// TODO Clusters:bool is a dummy field
+		Clusters        bool  `db:"domain_replication_config_clusters"`
+		IsGlobalDomain  bool  `db:"is_global_domain"`
+		ConfigVersion   int64 `db:"config_version"`
+		FailoverVersion int64 `db:"failover_version"`
 	}
 
 	// CreateDomainResponse is the response for CreateDomain
@@ -847,6 +859,17 @@ type (
 		FailoverNotificationVersion int64
 		NotificationVersion         int64
 		TableVersion                int
+	}
+
+	// FlatGetDomainResponse is a flat version of GetDomainResponse
+	FlatGetDomainResponse struct {
+		DomainInfo
+		DomainConfig
+		DomainReplicationConfig
+		IsGlobalDomain  bool
+		ConfigVersion   int64
+		FailoverVersion int64
+		DBVersion       int64
 	}
 
 	// UpdateDomainRequest is used to update domain

@@ -45,6 +45,7 @@ type (
 
 func TestMetadataPersistenceSuite(t *testing.T) {
 	s := new(metadataPersistenceSuite)
+	s.UseMysql = true
 	suite.Run(t, s)
 }
 
