@@ -29,7 +29,7 @@ import (
 )
 
 type (
-	// HistorySerializer is used to serialize/deserialize history
+	// HistorySerializer is used to gobSerialize/gobDeserialize history
 	HistorySerializer interface {
 		Serialize(batch *HistoryEventBatch) (*SerializedHistoryEventBatch, error)
 		Deserialize(batch *SerializedHistoryEventBatch) (*HistoryEventBatch, error)

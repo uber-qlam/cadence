@@ -15,6 +15,6 @@ CREATE TABLE domains(
   is_global_domain TINYINT,
 /* domain_replication_config */
   active_cluster_name CHAR(100),
-  clusters TINYINT /* this should be list<string> but we'll ignore this for now. */
+  clusters BLOB /* this should be list<string> but we'll ignore this for now. */
 /* end domain_replication_config */
 )
