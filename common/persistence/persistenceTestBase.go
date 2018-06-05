@@ -37,6 +37,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/uber-common/bark"
 	"github.com/jmoiron/sqlx"
+	"io/ioutil"
 )
 
 const (
@@ -199,9 +200,24 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			"localhost",
 			"3306",
 			"catalyst_test")
+
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		db, err := sqlx.Connect("mysql",
+			"uber:uber@tcp(localhost:3306)/catalyst_test")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		file, err := ioutil.ReadFile("./sql/domains.sql")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		db.MustExec(string(file))
+		db.Close()
 	}
 }
 
@@ -1005,15 +1021,14 @@ func (s *TestBase) SetupWorkflowStore() {
 // TearDownWorkflowStore to cleanup
 func (s *TestBase) TearDownWorkflowStore() {
 	if s.UseMysql {
-		log.Info("got em 1")
-		if db, err := sqlx.Connect("mysql",
-			"uber:uber@tcp(localhost:3306)/catalyst_test"); err == nil {
-			log.Info("got em 2")
-			db.Exec("truncate table domains")
-			db.Close()
-		} else {
+		db, err := sqlx.Connect("mysql",
+			"uber:uber@tcp(localhost:3306)/catalyst_test")
+		if err != nil {
 			log.Fatal(err)
 		}
+
+		db.MustExec(`drop table domains`)
+		db.Close()
 	} else {
 		s.CassandraTestCluster.tearDownTestCluster()
 	}
