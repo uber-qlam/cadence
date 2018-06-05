@@ -82,7 +82,6 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 	_, err = m.GetDomain(&GetDomainRequest{Name: request.Info.Name})
 	switch err.(type) {
 	case *workflow.EntityNotExistsError:
-		print("made the thing")
 		// Domain does not already exist. Create it.
 
 		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &FlatCreateDomainRequest{
