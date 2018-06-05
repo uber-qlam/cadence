@@ -830,8 +830,7 @@ type (
 		DomainInfo
 		DomainConfig
 		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
-		// TODO Clusters:bool is a dummy field
-		Clusters        bool  `db:"domain_replication_config_clusters"`
+		Clusters        []byte  `db:"domain_replication_config_clusters"`
 		IsGlobalDomain  bool  `db:"is_global_domain"`
 		ConfigVersion   int64 `db:"config_version"`
 		FailoverVersion int64 `db:"failover_version"`

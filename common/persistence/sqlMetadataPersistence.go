@@ -26,6 +26,8 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
+	"bytes"
+	"encoding/gob"
 )
 
 type (
@@ -71,6 +73,23 @@ func (m *sqlMetadataManager) Close() {
 	}
 }
 
+func gobSerialize(x interface{}) ([]byte, error) {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	err := e.Encode(x)
+	if err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func gobDeserialize(a []byte, x interface{}) (error) {
+	b := bytes.NewBuffer(a)
+	d := gob.NewDecoder(b)
+	err := d.Decode(x)
+	return err
+}
+
 func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*CreateDomainResponse, error) {
 	tx, err := m.db.Beginx()
 	if err != nil {
@@ -84,6 +103,14 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 	case *workflow.EntityNotExistsError:
 		// Domain does not already exist. Create it.
 
+		// Encode request.ReplicationConfig.Clusters
+		clusters, err := gobSerialize(serializeClusterConfigs(request.ReplicationConfig.Clusters))
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("CreateDomain operation failed. Failed to encode ReplicationConfig.Clusters. Value: %v", request.ReplicationConfig.Clusters),
+			}
+		}
+
 		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &FlatCreateDomainRequest{
 			DomainInfo:   *(request.Info),
 			DomainConfig: *(request.Config),
@@ -92,7 +119,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 
 			//DomainReplicationConfig: *(request.ReplicationConfig),
 			ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
-			Clusters:          false,
+			Clusters:          clusters,
 
 			// TODO
 
@@ -126,13 +153,23 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 }
 
 func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
+	// TODO cassandraMetaPersistence_test seems to lack a test case for when both ID and name are empty
+	// TOOO (even though the current Cassandra implementation does handle it)
+	// TODO so for now we will not handle it either.
+
 	var rows *sqlx.Rows
 	var err error
 
 	if len(request.Name) > 0 {
-		rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, map[string]interface{}{
-			"name": request.Name,
-		})
+		if len(request.ID) > 0 {
+			return nil, &workflow.BadRequestError{
+				Message: "GetDomain oepration failed.  Both ID and Name specified in request.",
+			}
+		} else {
+			rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, map[string]interface{}{
+				"name": request.Name,
+			})
+		}
 	} else if len(request.ID) > 0 {
 		rows, err = m.db.NamedQuery(templateGetDomainByIdSqlQuery, map[string]interface{}{
 			"id": request.ID,
@@ -162,6 +199,10 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 			return false
 		}
 
+		// Deserialize DomainReplicationConfig.Clusters
+		var clusters []map[string]interface{}
+		gobDeserialize(result["clusters"].([]byte), &clusters)
+
 		return &GetDomainResponse{
 			Info: &DomainInfo{
 				ID:   string(result["id"].([]byte)),
@@ -178,12 +219,8 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 			},
 			ReplicationConfig: &DomainReplicationConfig{
 				ActiveClusterName: GetOrUseDefaultActiveCluster("active",
-					string(result["active_cluster_name"].([]byte))), // TODO TO BE IMPLEMENTED
-				Clusters: []*ClusterReplicationConfig{
-					&ClusterReplicationConfig{
-						ClusterName: "active",
-					},
-				}, // TODO TO BE IMPLEMENTED
+					string(result["active_cluster_name"].([]byte))), // TODO TO BE IMPLEMENTED (get rid of "active" placeholder)
+				Clusters: GetOrUseDefaultClusters("active", deserializeClusterConfigs(clusters)), // TODO same
 			},
 			IsGlobalDomain:  int2bool("is_global_domain"),
 			ConfigVersion:   result["config_version"].(int64),
