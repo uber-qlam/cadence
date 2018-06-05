@@ -192,7 +192,6 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 		}, nil
 	}
 
-	fmt.Printf("could nto find id %s", request.Name)
 	// We did not return in the above for-loop because there were no rows.
 	identity := request.Name
 	if len(request.ID) > 0 {
