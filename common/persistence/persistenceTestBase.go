@@ -33,10 +33,10 @@ import (
 	"github.com/uber/cadence/common/logging"
 
 	"github.com/gocql/gocql"
+	"github.com/jmoiron/sqlx"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uber-common/bark"
-	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 )
 

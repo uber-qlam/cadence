@@ -25,9 +25,9 @@ import (
 	_ "github.com/go-sql-driver/mysql" // MySQL driver
 	"github.com/jmoiron/sqlx"
 
-	workflow "github.com/uber/cadence/.gen/go/shared"
 	"bytes"
 	"encoding/gob"
+	workflow "github.com/uber/cadence/.gen/go/shared"
 )
 
 type (
@@ -66,7 +66,7 @@ const (
 		:domain_replication_config_clusters
 		)`
 
-		getDomainPart = `SELECT
+	getDomainPart = `SELECT
 		id,
 		retention, 
 		emit_metric,
@@ -83,12 +83,11 @@ const (
 FROM domains
 `
 	templateGetDomainByIdSqlQuery = getDomainPart +
-`WHERE id = :id`
+		`WHERE id = :id`
 	templateGetDomainByNameSqlQuery = getDomainPart +
-		 `WHERE name = :name`
+		`WHERE name = :name`
 
-
-		 updateDomainPart = `UPDATE domains
+	updateDomainPart = `UPDATE domains
 SET
 		id = :domain_info_id,
 		retention = :domain_config_retention, 
@@ -107,9 +106,12 @@ name = :domain_info_name
 AND
 `
 	templateUpdateDomainWhereCurrentVersionIsNullSqlQuery = updateDomainPart +
-`db_version IS NULL`
+		`db_version IS NULL`
 	templateUpdateDomainWhereCurrentVersionIsIntSqlQuery = updateDomainPart +
 		`db_version = :current_db_version`
+
+	templateDeleteDomainByIdSqlQuery   = `DELETE FROM domains WHERE id = :id`
+	templateDeleteDomainByNameSqlQuery = `DELETE FROM domains WHERE name = :name`
 )
 
 func (m *sqlMetadataManager) Close() {
@@ -128,7 +130,7 @@ func gobSerialize(x interface{}) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func gobDeserialize(a []byte, x interface{}) (error) {
+func gobDeserialize(a []byte, x interface{}) error {
 	b := bytes.NewBuffer(a)
 	d := gob.NewDecoder(b)
 	err := d.Decode(x)
@@ -192,7 +194,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 		print(err.Error())
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf(
-					"CreateDomain operation failed. Could not check if domain already existed. Error: %v", err),
+				"CreateDomain operation failed. Could not check if domain already existed. Error: %v", err),
 		}
 	}
 }
@@ -218,14 +220,10 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 				Message: "GetDomain operation failed.  Both ID and Name specified in request.",
 			}
 		} else {
-			rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, map[string]interface{}{
-				"name": request.Name,
-			})
+			rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, request)
 		}
 	} else if len(request.ID) > 0 {
-		rows, err = m.db.NamedQuery(templateGetDomainByIdSqlQuery, map[string]interface{}{
-			"id": request.ID,
-		})
+		rows, err = m.db.NamedQuery(templateGetDomainByIdSqlQuery, request)
 	}
 
 	if err != nil {
@@ -316,14 +314,14 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 	}
 
 	_, err = m.db.NamedExec(queryToUse, &FlatUpdateDomainRequest{
-		DomainInfo: *(request.Info),
-		DomainConfig: *(request.Config),
+		DomainInfo:        *(request.Info),
+		DomainConfig:      *(request.Config),
 		ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
-		Clusters: clusters,
-		ConfigVersion: request.ConfigVersion,
-		FailoverVersion: request.FailoverVersion,
-		CurrentDBVersion: request.DBVersion,
-		NextDBVersion: request.DBVersion + 1,
+		Clusters:          clusters,
+		ConfigVersion:     request.ConfigVersion,
+		FailoverVersion:   request.FailoverVersion,
+		CurrentDBVersion:  request.DBVersion,
+		NextDBVersion:     request.DBVersion + 1,
 	})
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -334,12 +332,40 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 	return nil
 }
 
+// TODO Find a way to get rid of code repetition without using a type switch
+
 func (m *sqlMetadataManager) DeleteDomain(request *DeleteDomainRequest) error {
-	panic("implement me")
+	_, err := m.GetDomain(&GetDomainRequest{
+		ID: request.ID,
+	})
+	switch err.(type) {
+	case *workflow.EntityNotExistsError:
+		return nil
+	default:
+		if _, err = m.db.NamedExec(templateDeleteDomainByIdSqlQuery, request); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("DeleteDomain operation failed. Error %v", err),
+			}
+		}
+		return nil
+	}
 }
 
 func (m *sqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameRequest) error {
-	panic("implement me")
+	_, err := m.GetDomain(&GetDomainRequest{
+		Name: request.Name,
+	})
+	switch err.(type) {
+	case *workflow.EntityNotExistsError:
+		return nil
+	default:
+		if _, err = m.db.NamedExec(templateDeleteDomainByNameSqlQuery, request); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("DeleteDomainByName operation failed. Error %v", err),
+			}
+		}
+		return nil
+	}
 }
 
 // NewMysqlMetadataPersistence creates an instance of sqlMetadataManager
