@@ -815,10 +815,10 @@ type (
 		DomainInfo
 		DomainConfig
 		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
-		Clusters        []byte  `db:"domain_replication_config_clusters"`
-		IsGlobalDomain  bool  `db:"is_global_domain"`
-		ConfigVersion   int64 `db:"config_version"`
-		FailoverVersion int64 `db:"failover_version"`
+		Clusters          []byte `db:"domain_replication_config_clusters"`
+		IsGlobalDomain    bool   `db:"is_global_domain"`
+		ConfigVersion     int64  `db:"config_version"`
+		FailoverVersion   int64  `db:"failover_version"`
 	}
 
 	// CreateDomainResponse is the response for CreateDomain
@@ -869,21 +869,21 @@ type (
 		DomainInfo
 		DomainConfig
 		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
-		Clusters        []byte  `db:"domain_replication_config_clusters"`
-		ConfigVersion   int64 `db:"config_version"`
-		FailoverVersion int64 `db:"failover_version"`
-		CurrentDBVersion int64 `db:"current_db_version"`
-		NextDBVersion int64 `db:"next_db_version"`
+		Clusters          []byte `db:"domain_replication_config_clusters"`
+		ConfigVersion     int64  `db:"config_version"`
+		FailoverVersion   int64  `db:"failover_version"`
+		CurrentDBVersion  int64  `db:"current_db_version"`
+		NextDBVersion     int64  `db:"next_db_version"`
 	}
 
 	// DeleteDomainRequest is used to delete domain entry from domains table
 	DeleteDomainRequest struct {
-		ID string
+		ID string `db:"id"`
 	}
 
 	// DeleteDomainByNameRequest is used to delete domain entry from domains_by_name table
 	DeleteDomainByNameRequest struct {
-		Name string
+		Name string `db:"name"`
 	}
 
 	// Closeable is an interface for any entity that supports a close operation to release resources
