@@ -1152,6 +1152,7 @@ func (s *CassandraTestCluster) setupTestCluster(options TestBaseOptions) {
 	if keySpace == "" {
 		keySpace = generateRandomKeyspace(10)
 	}
+
 	s.createCluster(
 		testWorkflowClusterHosts, options.ClusterPort, testUser, testPassword, testDatacenter,
 		gocql.Consistency(1), keySpace,

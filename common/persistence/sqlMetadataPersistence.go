@@ -37,34 +37,79 @@ type (
 )
 
 const (
-	domainsSchema = `
-`
-
 	templateCreateDomainSqlQuery = `INSERT INTO domains (
 		id,
-		retention, emit_metric,
+		retention, 
+		emit_metric,
 		config_version,
 		name, 
 		status, 
 		description, 
 		owner_email,
-		failover_version, is_global_domain,
-		active_cluster_name, clusters
+		failover_version, 
+		is_global_domain,
+		active_cluster_name, 
+		clusters
 		)
 		VALUES(
 		:domain_info_id,
-		:domain_config_retention, :domain_config_emit_metric,
+		:domain_config_retention, 
+		:domain_config_emit_metric,
 		:config_version,
 		:domain_info_name, 
 		:domain_info_status, 
 		:domain_info_description, 
 		:domain_info_owner_email,
-		:failover_version, :is_global_domain,
-		:domain_replication_config_active_cluster_name, :domain_replication_config_clusters
+		:failover_version, 
+		:is_global_domain,
+		:domain_replication_config_active_cluster_name, 
+		:domain_replication_config_clusters
 		)`
 
-	templateGetDomainByIdSqlQuery = `SELECT * FROM domains WHERE id = :id`
-	templateGetDomainByNameSqlQuery = `SELECT * FROM domains WHERE name = :name`
+		getDomainPart = `SELECT
+		id,
+		retention, 
+		emit_metric,
+		config_version,
+		name, 
+		status, 
+		description, 
+		owner_email,
+		failover_version, 
+		is_global_domain,
+		active_cluster_name, 
+		clusters,
+		db_version
+FROM domains
+`
+	templateGetDomainByIdSqlQuery = getDomainPart +
+`WHERE id = :id`
+	templateGetDomainByNameSqlQuery = getDomainPart +
+		 `WHERE name = :name`
+
+
+		 updateDomainPart = `UPDATE domains
+SET
+		id = :domain_info_id,
+		retention = :domain_config_retention, 
+		emit_metric = :domain_config_emit_metric,
+		config_version = :config_version,
+		name = :domain_info_name, 
+		status = :domain_info_status, 
+		description = :domain_info_description, 
+		owner_email = :domain_info_owner_email,
+		failover_version = :failover_version, 
+		active_cluster_name = :domain_replication_config_active_cluster_name,  
+		clusters = :domain_replication_config_clusters,
+		db_version = :next_db_version
+WHERE
+name = :domain_info_name
+AND
+`
+	templateUpdateDomainWhereCurrentVersionIsNullSqlQuery = updateDomainPart +
+`db_version IS NULL`
+	templateUpdateDomainWhereCurrentVersionIsIntSqlQuery = updateDomainPart +
+		`db_version = :current_db_version`
 )
 
 func (m *sqlMetadataManager) Close() {
@@ -154,8 +199,15 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 
 func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
 	// TODO cassandraMetaPersistence_test seems to lack a test case for when both ID and name are empty
-	// TOOO (even though the current Cassandra implementation does handle it)
+	// TODO (even though the current Cassandra implementation does handle it)
 	// TODO so for now we will not handle it either.
+
+	// CAVEAT! The Cassandra persistence implementation relies on the following behaviour of gocql's scan:
+	// if a column entry is NULL, the result of the scan is the type's default value
+	// e.g. if dbVersion is NULL, we will get dbVersion 0
+	// We have to explicitly implement this behaviour since the result of a scan
+	// with go-sql-driver/mysql is that
+	// the map[string]interface{} has, for its "dbVersion" key, an interface{}(nil) as the value
 
 	var rows *sqlx.Rows
 	var err error
@@ -163,7 +215,7 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 	if len(request.Name) > 0 {
 		if len(request.ID) > 0 {
 			return nil, &workflow.BadRequestError{
-				Message: "GetDomain oepration failed.  Both ID and Name specified in request.",
+				Message: "GetDomain operation failed.  Both ID and Name specified in request.",
 			}
 		} else {
 			rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, map[string]interface{}{
@@ -203,6 +255,12 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 		var clusters []map[string]interface{}
 		gobDeserialize(result["clusters"].([]byte), &clusters)
 
+		// Set dbVersion to 0 if it is currently NULL
+		// See caveat detailed above.
+		if result["db_version"] == interface{}(nil) {
+			result["db_version"] = int64(0)
+		}
+
 		return &GetDomainResponse{
 			Info: &DomainInfo{
 				ID:   string(result["id"].([]byte)),
@@ -240,7 +298,40 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
-	panic("implement me")
+	// Caveat. The Cassandra persistence implementation has the following logic for how to fill in
+	// the "db version" bindings for the update query:
+	// if request.DBVersion <= 0, then (currentVersion, nextVersion) = (nil, 1)
+	// else, (currentVersion, nextVersion) = (request.DBVersion, request.DBVersion + 1)
+
+	clusters, err := gobSerialize(serializeClusterConfigs(request.ReplicationConfig.Clusters))
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateDomain operation failed. Failed to encode ReplicationConfig.Clusters. Value: %v", request.ReplicationConfig.Clusters),
+		}
+	}
+
+	queryToUse := templateUpdateDomainWhereCurrentVersionIsNullSqlQuery
+	if request.DBVersion > 0 {
+		queryToUse = templateUpdateDomainWhereCurrentVersionIsIntSqlQuery
+	}
+
+	_, err = m.db.NamedExec(queryToUse, &FlatUpdateDomainRequest{
+		DomainInfo: *(request.Info),
+		DomainConfig: *(request.Config),
+		ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
+		Clusters: clusters,
+		ConfigVersion: request.ConfigVersion,
+		FailoverVersion: request.FailoverVersion,
+		CurrentDBVersion: request.DBVersion,
+		NextDBVersion: request.DBVersion + 1,
+	})
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateDomain operation failed. Error %v", err),
+		}
+	}
+
+	return nil
 }
 
 func (m *sqlMetadataManager) DeleteDomain(request *DeleteDomainRequest) error {

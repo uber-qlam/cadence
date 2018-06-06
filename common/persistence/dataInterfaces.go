@@ -883,6 +883,18 @@ type (
 		TableVersion                int
 	}
 
+	// FlatUpdateDomainRequest is a flattened version of UpdateDomainRequest
+	FlatUpdateDomainRequest struct {
+		DomainInfo
+		DomainConfig
+		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
+		Clusters        []byte  `db:"domain_replication_config_clusters"`
+		ConfigVersion   int64 `db:"config_version"`
+		FailoverVersion int64 `db:"failover_version"`
+		CurrentDBVersion int64 `db:"current_db_version"`
+		NextDBVersion int64 `db:"next_db_version"`
+	}
+
 	// DeleteDomainRequest is used to delete domain entry from domains table
 	DeleteDomainRequest struct {
 		ID string
