@@ -51,6 +51,7 @@ var timePrecision = 2 * time.Millisecond
 
 func TestCassandraPersistenceSuite(t *testing.T) {
 	s := new(cassandraPersistenceSuite)
+	s.UseMysql = true
 	suite.Run(t, s)
 }
 

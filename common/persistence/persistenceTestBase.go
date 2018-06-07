@@ -114,6 +114,8 @@ func (g *testTransferTaskIDGenerator) GetNextTransferTaskID() (int64, error) {
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
 func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metadata cluster.Metadata) {
+	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
+
 	if !s.UseMysql {
 		log := bark.NewLoggerFromLogrus(log.New())
 
@@ -172,8 +174,6 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		s.TaskIDGenerator = &testTransferTaskIDGenerator{}
-
 		// Create a shard for test
 		s.readLevel = 0
 		s.replicationReadLevel = 0
@@ -195,7 +195,7 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		}
 	} else {
 		var err error
-		s.MetadataManager, err = NewMysqlMetadataPersistence("uber",
+		s.MetadataManager, err = NewSqlMetadataPersistence("uber",
 			"uber",
 			"localhost",
 			"3306",
@@ -204,6 +204,14 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		s.ShardInfo = &ShardInfo{}
+
+		s.WorkflowMgr, err = NewSqlWorkflowExecutionPersistence()
+		if err != nil { log.Fatal(err) }
+
+		s.TaskMgr, err = NewSqlTaskPersistence()
+		if err != nil { log.Fatal(err) }
 
 		db, err := sqlx.Connect("mysql",
 			"uber:uber@tcp(localhost:3306)/catalyst_test")

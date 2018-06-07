@@ -285,6 +285,7 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 		}, nil
 	}
 
+	rows.Close()
 	// We did not return in the above for-loop because there were no rows.
 	identity := request.Name
 	if len(request.ID) > 0 {
@@ -369,8 +370,8 @@ func (m *sqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameReque
 	}
 }
 
-// NewMysqlMetadataPersistence creates an instance of sqlMetadataManager
-func NewMysqlMetadataPersistence(username, password, host, port, dbName string) (MetadataManager, error) {
+// NewSqlMetadataPersistence creates an instance of sqlMetadataManager
+func NewSqlMetadataPersistence(username, password, host, port, dbName string) (MetadataManager, error) {
 	var db, err = sqlx.Connect("mysql",
 		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
 	if err != nil {
