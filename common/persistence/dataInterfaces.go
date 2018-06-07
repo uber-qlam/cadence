@@ -790,24 +790,24 @@ type (
 
 	// DomainInfo describes the domain entity
 	DomainInfo struct {
-		ID          string `db:"domain_info_id"`
-		Name        string `db:"domain_info_name"`
-		Status      int    `db:"domain_info_status"`
-		Description string `db:"domain_info_description"`
-		OwnerEmail  string `db:"domain_info_owner_email"`
+		ID          string `db:"id"`
+		Name        string `db:"name"`
+		Status      int    `db:"status"`
+		Description string `db:"description"`
+		OwnerEmail  string `db:"owner_email"`
 	}
 
 	// DomainConfig describes the domain configuration
 	DomainConfig struct {
 		// NOTE: this retention is in days, not in seconds
-		Retention  int32 `db:"domain_config_retention"`
-		EmitMetric bool  `db:"domain_config_emit_metric"`
+		Retention  int32 `db:"retention"`
+		EmitMetric bool  `db:"emit_metric"`
 	}
 
 	// DomainReplicationConfig describes the cross DC domain replication configuration
 	DomainReplicationConfig struct {
-		ActiveClusterName string                      `db:"domain_replication_config_active_cluster_name"'`
-		Clusters          []*ClusterReplicationConfig `db:"domain_replication_config_clusters"`
+		ActiveClusterName string                      `db:"active_cluster_name"'`
+		Clusters          []*ClusterReplicationConfig `db:"clusters"`
 	}
 
 	// ClusterReplicationConfig describes the cross DC cluster replication configuration
@@ -823,17 +823,6 @@ type (
 		IsGlobalDomain    bool
 		ConfigVersion     int64
 		FailoverVersion   int64
-	}
-
-	// FlatCreateDomainRequest is a flattened version of CreateDomainRequest
-	FlatCreateDomainRequest struct {
-		DomainInfo
-		DomainConfig
-		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
-		Clusters          []byte `db:"domain_replication_config_clusters"`
-		IsGlobalDomain    bool   `db:"is_global_domain"`
-		ConfigVersion     int64  `db:"config_version"`
-		FailoverVersion   int64  `db:"failover_version"`
 	}
 
 	// CreateDomainResponse is the response for CreateDomain
@@ -860,17 +849,6 @@ type (
 		TableVersion                int
 	}
 
-	// FlatGetDomainResponse is a flat version of GetDomainResponse
-	FlatGetDomainResponse struct {
-		DomainInfo
-		DomainConfig
-		DomainReplicationConfig
-		IsGlobalDomain  bool
-		ConfigVersion   int64
-		FailoverVersion int64
-		DBVersion       int64
-	}
-
 	// UpdateDomainRequest is used to update domain
 	UpdateDomainRequest struct {
 		Info                        *DomainInfo
@@ -881,18 +859,6 @@ type (
 		FailoverNotificationVersion int64
 		NotificationVersion         int64
 		TableVersion                int
-	}
-
-	// FlatUpdateDomainRequest is a flattened version of UpdateDomainRequest
-	FlatUpdateDomainRequest struct {
-		DomainInfo
-		DomainConfig
-		ActiveClusterName string `db:"domain_replication_config_active_cluster_name"`
-		Clusters          []byte `db:"domain_replication_config_clusters"`
-		ConfigVersion     int64  `db:"config_version"`
-		FailoverVersion   int64  `db:"failover_version"`
-		CurrentDBVersion  int64  `db:"current_db_version"`
-		NextDBVersion     int64  `db:"next_db_version"`
 	}
 
 	// DeleteDomainRequest is used to delete domain entry from domains table

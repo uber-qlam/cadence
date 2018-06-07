@@ -34,6 +34,29 @@ type (
 	sqlMetadataManager struct {
 		db *sqlx.DB
 	}
+
+	// flatCreateDomainRequest is a flattened version of CreateDomainRequest
+	flatCreateDomainRequest struct {
+		DomainInfo
+		DomainConfig
+		ActiveClusterName string `db:"active_cluster_name"`
+		Clusters          []byte `db:"clusters"`
+		IsGlobalDomain    bool   `db:"is_global_domain"`
+		ConfigVersion     int64  `db:"config_version"`
+		FailoverVersion   int64  `db:"failover_version"`
+	}
+
+	// flatUpdateDomainRequest is a flattened version of UpdateDomainRequest
+	flatUpdateDomainRequest struct {
+		DomainInfo
+		DomainConfig
+		ActiveClusterName string `db:"active_cluster_name"`
+		Clusters          []byte `db:"clusters"`
+		ConfigVersion     int64  `db:"config_version"`
+		FailoverVersion   int64  `db:"failover_version"`
+		CurrentDBVersion  int64  `db:"current_db_version"`
+		NextDBVersion     int64  `db:"next_db_version"`
+	}
 )
 
 const (
@@ -158,7 +181,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 			}
 		}
 
-		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &FlatCreateDomainRequest{
+		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &flatCreateDomainRequest{
 			DomainInfo:   *(request.Info),
 			DomainConfig: *(request.Config),
 			// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
@@ -313,7 +336,7 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 		queryToUse = templateUpdateDomainWhereCurrentVersionIsIntSqlQuery
 	}
 
-	_, err = m.db.NamedExec(queryToUse, &FlatUpdateDomainRequest{
+	_, err = m.db.NamedExec(queryToUse, &flatUpdateDomainRequest{
 		DomainInfo:        *(request.Info),
 		DomainConfig:      *(request.Config),
 		ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
