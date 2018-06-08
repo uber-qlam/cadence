@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS domains(
   config_version BIGINT NOT NULL,
   db_version BIGINT,
 /* domain */
-  name VARCHAR(255) NOT NULL,
+  name VARCHAR(255) PRIMARY KEY NOT NULL,
   status INT,
   description VARCHAR(255),
   owner_email VARCHAR(255),
