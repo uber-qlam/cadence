@@ -7,9 +7,9 @@ CREATE TABLE IF NOT EXISTS domains(
   db_version BIGINT,
 /* domain */
   name VARCHAR(255) PRIMARY KEY NOT NULL,
-  status INT,
-  description VARCHAR(255),
-  owner_email VARCHAR(255),
+  status INT NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  owner_email VARCHAR(255) NOT NULL,
 /* end domain */
   failover_version BIGINT NOT NULL,
   is_global_domain TINYINT(1) NOT NULL,

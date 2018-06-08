@@ -217,7 +217,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 
 		tx.Commit()
 		return &CreateDomainResponse{ID: request.Info.ID}, nil
-		
+
 	default:
 		print("default")
 		print(err.Error())
