@@ -269,7 +269,6 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 				Message: fmt.Sprintf("Domain %s does not exist.", identity),
 			}
 		default:
-			panic(1)
 			return nil, &workflow.InternalServiceError{
 				Message: fmt.Sprintf("GetDomain operation failed. Error %v", err),
 			}
