@@ -174,6 +174,13 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 
 	// Disallow creating more than one domain with the same name, even if the UUID is different.
 	resp, err := m.GetDomain(&GetDomainRequest{Name: request.Info.Name})
+	if err == nil {
+		// The domain already exists.
+		return nil, &workflow.DomainAlreadyExistsError{
+			Message: fmt.Sprintf("Domain already exists.  DomainId: %v", resp.Info.ID),
+		}
+	}
+
 	switch err.(type) {
 	case *workflow.EntityNotExistsError:
 		// Domain does not already exist. Create it.
@@ -210,13 +217,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 
 		tx.Commit()
 		return &CreateDomainResponse{ID: request.Info.ID}, nil
-
-	case nil:
-		// The domain already exists.
-		return nil, &workflow.DomainAlreadyExistsError{
-			Message: fmt.Sprintf("Domain already exists.  DomainId: %v", resp.Info.ID),
-		}
-
+		
 	default:
 		print("default")
 		print(err.Error())
@@ -357,37 +358,21 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 // TODO Find a way to get rid of code repetition without using a type switch
 
 func (m *sqlMetadataManager) DeleteDomain(request *DeleteDomainRequest) error {
-	_, err := m.GetDomain(&GetDomainRequest{
-		ID: request.ID,
-	})
-	switch err.(type) {
-	case *workflow.EntityNotExistsError:
-		return nil
-	default:
-		if _, err = m.db.NamedExec(templateDeleteDomainByIdSqlQuery, request); err != nil {
+	if _, err := m.db.NamedExec(templateDeleteDomainByIdSqlQuery, request); err != nil {
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("DeleteDomain operation failed. Error %v", err),
 			}
 		}
 		return nil
-	}
 }
 
 func (m *sqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameRequest) error {
-	_, err := m.GetDomain(&GetDomainRequest{
-		Name: request.Name,
-	})
-	switch err.(type) {
-	case *workflow.EntityNotExistsError:
-		return nil
-	default:
-		if _, err = m.db.NamedExec(templateDeleteDomainByNameSqlQuery, request); err != nil {
+	if _, err := m.db.NamedExec(templateDeleteDomainByNameSqlQuery, request); err != nil {
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("DeleteDomainByName operation failed. Error %v", err),
 			}
 		}
 		return nil
-	}
 }
 
 // NewMysqlMetadataPersistence creates an instance of sqlMetadataManager
