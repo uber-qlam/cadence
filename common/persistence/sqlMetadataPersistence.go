@@ -26,6 +26,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"bytes"
+	"database/sql"
 	"encoding/gob"
 	workflow "github.com/uber/cadence/.gen/go/shared"
 )
@@ -35,8 +36,9 @@ type (
 		db *sqlx.DB
 	}
 
-	// flatCreateDomainRequest is a flattened version of CreateDomainRequest
-	flatCreateDomainRequest struct {
+	// domainRow is a flattened version of CreateDomainRequest
+	// but it also contains a DBVersion row.
+	domainRow struct {
 		DomainInfo
 		DomainConfig
 		ActiveClusterName string `db:"active_cluster_name"`
@@ -44,6 +46,7 @@ type (
 		IsGlobalDomain    bool   `db:"is_global_domain"`
 		ConfigVersion     int64  `db:"config_version"`
 		FailoverVersion   int64  `db:"failover_version"`
+		DBVersion         sql.NullInt64  `db:"db_version"`
 	}
 
 	// flatUpdateDomainRequest is a flattened version of UpdateDomainRequest
@@ -62,7 +65,7 @@ type (
 const (
 	templateCreateDomainSqlQuery = `INSERT INTO domains (
 		id,
-		retention, 
+		retention_days, 
 		emit_metric,
 		config_version,
 		name, 
@@ -72,26 +75,28 @@ const (
 		failover_version, 
 		is_global_domain,
 		active_cluster_name, 
-		clusters
+		clusters, 
+db_version
 		)
 		VALUES(
-		:domain_info_id,
-		:domain_config_retention, 
-		:domain_config_emit_metric,
+		:id,
+		:retention_days, 
+		:emit_metric,
 		:config_version,
-		:domain_info_name, 
-		:domain_info_status, 
-		:domain_info_description, 
-		:domain_info_owner_email,
+		:name, 
+		:status, 
+		:description, 
+		:owner_email,
 		:failover_version, 
 		:is_global_domain,
-		:domain_replication_config_active_cluster_name, 
-		:domain_replication_config_clusters
+		:active_cluster_name, 
+		:clusters,
+:db_version
 		)`
 
 	getDomainPart = `SELECT
 		id,
-		retention, 
+		retention_days, 
 		emit_metric,
 		config_version,
 		name, 
@@ -112,20 +117,20 @@ FROM domains
 
 	updateDomainPart = `UPDATE domains
 SET
-		id = :domain_info_id,
-		retention = :domain_config_retention, 
-		emit_metric = :domain_config_emit_metric,
+		id = :id,
+		retention_days = :retention_days, 
+		emit_metric = :emit_metric,
 		config_version = :config_version,
-		name = :domain_info_name, 
-		status = :domain_info_status, 
-		description = :domain_info_description, 
-		owner_email = :domain_info_owner_email,
+		name = :name, 
+		status = :status, 
+		description = :description, 
+		owner_email = :owner_email,
 		failover_version = :failover_version, 
-		active_cluster_name = :domain_replication_config_active_cluster_name,  
-		clusters = :domain_replication_config_clusters,
+		active_cluster_name = :active_cluster_name,  
+		clusters = :clusters,
 		db_version = :next_db_version
 WHERE
-name = :domain_info_name
+name = :name
 AND
 `
 	templateUpdateDomainWhereCurrentVersionIsNullSqlQuery = updateDomainPart +
@@ -168,7 +173,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 	defer tx.Rollback()
 
 	// Disallow creating more than one domain with the same name, even if the UUID is different.
-	_, err = m.GetDomain(&GetDomainRequest{Name: request.Info.Name})
+	resp, err := m.GetDomain(&GetDomainRequest{Name: request.Info.Name})
 	switch err.(type) {
 	case *workflow.EntityNotExistsError:
 		// Domain does not already exist. Create it.
@@ -181,7 +186,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 			}
 		}
 
-		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &flatCreateDomainRequest{
+		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &domainRow{
 			DomainInfo:   *(request.Info),
 			DomainConfig: *(request.Config),
 			// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
@@ -209,7 +214,7 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 	case nil:
 		// The domain already exists.
 		return nil, &workflow.DomainAlreadyExistsError{
-			Message: fmt.Sprintf("Domain already exists.  DomainId: %v", request.Info.ID),
+			Message: fmt.Sprintf("Domain already exists.  DomainId: %v", resp.Info.ID),
 		}
 
 	default:
@@ -234,8 +239,8 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 	// with go-sql-driver/mysql is that
 	// the map[string]interface{} has, for its "dbVersion" key, an interface{}(nil) as the value
 
-	var rows *sqlx.Rows
 	var err error
+	var stmt *sqlx.NamedStmt
 
 	if len(request.Name) > 0 {
 		if len(request.ID) > 0 {
@@ -243,79 +248,73 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 				Message: "GetDomain operation failed.  Both ID and Name specified in request.",
 			}
 		} else {
-			rows, err = m.db.NamedQuery(templateGetDomainByNameSqlQuery, request)
+			stmt, err = m.db.PrepareNamed(templateGetDomainByNameSqlQuery)
 		}
 	} else if len(request.ID) > 0 {
-		rows, err = m.db.NamedQuery(templateGetDomainByIdSqlQuery, request)
+		stmt, err = m.db.PrepareNamed(templateGetDomainByIdSqlQuery)
+	} else {
+		return nil, &workflow.BadRequestError{
+			Message: "GetDomain operation failed.  Both ID and Name are empty.",
+		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	for rows.Next() {
-		// Since IDs/names are unique, there should only be one row as a result, and we should be able to return.
-
-		result := make(map[string]interface{})
-		err2 := rows.MapScan(result)
-		if err2 != nil {
-			return nil, err2
-		}
-		// Done with the rows, since there was only one.
-		rows.Close()
-
-		// int to bool conversions
-		int2bool := func(key string) bool {
-			if result[key].(int64) == 1 {
-				return true
+	var result domainRow
+	if err = stmt.Get(&result, request); err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			// We did not return in the above for-loop because there were no rows.
+			identity := request.Name
+			if len(request.ID) > 0 {
+				identity = request.ID
 			}
-			return false
+
+			return nil, &workflow.EntityNotExistsError{
+				Message: fmt.Sprintf("Domain %s does not exist.", identity),
+			}
+		default:
+			panic(1)
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetDomain operation failed. Error %v", err),
+			}
+
 		}
 
-		// Deserialize DomainReplicationConfig.Clusters
-		var clusters []map[string]interface{}
-		gobDeserialize(result["clusters"].([]byte), &clusters)
-
-		// Set dbVersion to 0 if it is currently NULL
-		// See caveat detailed above.
-		if result["db_version"] == interface{}(nil) {
-			result["db_version"] = int64(0)
-		}
-
-		return &GetDomainResponse{
-			Info: &DomainInfo{
-				ID:   string(result["id"].([]byte)),
-				Name: string(result["name"].([]byte)),
-				// All integer types are scanned as int64, regardless of the table schema
-				// https://github.com/go-sql-driver/mysql/issues/549
-				Status:      int(result["status"].(int64)),
-				Description: string(result["description"].([]byte)),
-				OwnerEmail:  string(result["owner_email"].([]byte)),
-			},
-			Config: &DomainConfig{
-				Retention:  int32(result["retention"].(int64)),
-				EmitMetric: int2bool("emit_metric"),
-			},
-			ReplicationConfig: &DomainReplicationConfig{
-				ActiveClusterName: GetOrUseDefaultActiveCluster("active",
-					string(result["active_cluster_name"].([]byte))), // TODO TO BE IMPLEMENTED (get rid of "active" placeholder)
-				Clusters: GetOrUseDefaultClusters("active", deserializeClusterConfigs(clusters)), // TODO same
-			},
-			IsGlobalDomain:  int2bool("is_global_domain"),
-			ConfigVersion:   result["config_version"].(int64),
-			FailoverVersion: result["failover_version"].(int64),
-		}, nil
 	}
 
-	// We did not return in the above for-loop because there were no rows.
-	identity := request.Name
-	if len(request.ID) > 0 {
-		identity = request.ID
+	var clusters []map[string]interface{}
+	err = gobDeserialize(result.Clusters, &clusters)
+
+	var dbVersion int64 = 0
+	if result.DBVersion.Valid {
+		dbVersion = result.DBVersion.Int64
 	}
 
-	return nil, &workflow.EntityNotExistsError{
-		Message: fmt.Sprintf("Domain %s does not exist.", identity),
-	}
+	return &GetDomainResponse{
+		Info:   &result.DomainInfo,
+		Config: &result.DomainConfig,
+		ReplicationConfig: &DomainReplicationConfig{
+			ActiveClusterName: GetOrUseDefaultActiveCluster("active",
+				result.ActiveClusterName), // TODO TO BE IMPLEMENTED (get rid of "active" placeholder)
+			Clusters: GetOrUseDefaultClusters("active", deserializeClusterConfigs(clusters)), // TODO same
+		},
+		IsGlobalDomain:  result.IsGlobalDomain,
+		DBVersion:       dbVersion,
+		FailoverVersion: result.FailoverVersion,
+		ConfigVersion:   result.ConfigVersion,
+	}, nil
+
+	// int to bool conversions
+	//int2bool := func(key string) bool {
+	//	if result[key].(int64) == 1 {
+	//		return true
+	//	}
+	//	return false
+	//}
+
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {

@@ -1,20 +1,21 @@
-CREATE TABLE domains(
-  id CHAR(36) UNIQUE,
-  retention INT,
-  emit_metric TINYINT, /* we are using TINYINT for boolean... should we be? */
+CREATE TABLE IF NOT EXISTS domains(
+  id VARCHAR(64) UNIQUE NOT NULL,
+  retention_days INT NOT NULL,
+  emit_metric TINYINT(1) NOT NULL,
 /* end domain_config */
-  config_version BIGINT,
+  config_version BIGINT NOT NULL,
   db_version BIGINT,
 /* domain */
-  name CHAR(100) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
   status INT,
-  description CHAR(200),
-  owner_email CHAR(100),
+  description VARCHAR(255),
+  owner_email VARCHAR(255),
 /* end domain */
-  failover_version BIGINT,
-  is_global_domain TINYINT,
+  failover_version BIGINT NOT NULL,
+  is_global_domain TINYINT(1) NOT NULL,
 /* domain_replication_config */
-  active_cluster_name CHAR(100),
-  clusters BLOB /* this should be list<string> but we'll ignore this for now. */
+  active_cluster_name VARCHAR(255) NOT NULL,
+  clusters BLOB NOT NULL
 /* end domain_replication_config */
-)
+) DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+
