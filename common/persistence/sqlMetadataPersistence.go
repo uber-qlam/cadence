@@ -41,12 +41,12 @@ type (
 	domainRow struct {
 		DomainInfo
 		DomainConfig
-		ActiveClusterName string `db:"active_cluster_name"`
-		Clusters          []byte `db:"clusters"`
-		IsGlobalDomain    bool   `db:"is_global_domain"`
-		ConfigVersion     int64  `db:"config_version"`
-		FailoverVersion   int64  `db:"failover_version"`
-		DBVersion         sql.NullInt64  `db:"db_version"`
+		ActiveClusterName string        `db:"active_cluster_name"`
+		Clusters          []byte        `db:"clusters"`
+		IsGlobalDomain    bool          `db:"is_global_domain"`
+		ConfigVersion     int64         `db:"config_version"`
+		FailoverVersion   int64         `db:"failover_version"`
+		DBVersion         sql.NullInt64 `db:"db_version"`
 	}
 
 	// flatUpdateDomainRequest is a flattened version of UpdateDomainRequest
@@ -61,6 +61,10 @@ type (
 		NextDBVersion     int64  `db:"next_db_version"`
 	}
 )
+
+func (m *sqlMetadataManager) ListDomain(request *ListDomainRequest) (*ListDomainResponse, error) {
+	panic("implement me")
+}
 
 const (
 	templateCreateDomainSqlQuery = `INSERT INTO domains (
@@ -229,17 +233,6 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 }
 
 func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainResponse, error) {
-	// TODO cassandraMetaPersistence_test seems to lack a test case for when both ID and name are empty
-	// TODO (even though the current Cassandra implementation does handle it)
-	// TODO so for now we will not handle it either.
-
-	// CAVEAT! The Cassandra persistence implementation relies on the following behaviour of gocql's scan:
-	// if a column entry is NULL, the result of the scan is the type's default value
-	// e.g. if dbVersion is NULL, we will get dbVersion 0
-	// We have to explicitly implement this behaviour since the result of a scan
-	// with go-sql-driver/mysql is that
-	// the map[string]interface{} has, for its "dbVersion" key, an interface{}(nil) as the value
-
 	var err error
 	var stmt *sqlx.NamedStmt
 
@@ -248,9 +241,8 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 			return nil, &workflow.BadRequestError{
 				Message: "GetDomain operation failed.  Both ID and Name specified in request.",
 			}
-		} else {
-			stmt, err = m.db.PrepareNamed(templateGetDomainByNameSqlQuery)
 		}
+		stmt, err = m.db.PrepareNamed(templateGetDomainByNameSqlQuery)
 	} else if len(request.ID) > 0 {
 		stmt, err = m.db.PrepareNamed(templateGetDomainByIdSqlQuery)
 	} else {
@@ -289,7 +281,7 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 	var clusters []map[string]interface{}
 	err = gobDeserialize(result.Clusters, &clusters)
 
-	var dbVersion int64 = 0
+	var dbVersion int64
 	if result.DBVersion.Valid {
 		dbVersion = result.DBVersion.Int64
 	}
@@ -302,28 +294,14 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 				result.ActiveClusterName), // TODO TO BE IMPLEMENTED (get rid of "active" placeholder)
 			Clusters: GetOrUseDefaultClusters("active", deserializeClusterConfigs(clusters)), // TODO same
 		},
-		IsGlobalDomain:  result.IsGlobalDomain,
-		DBVersion:       dbVersion,
-		FailoverVersion: result.FailoverVersion,
-		ConfigVersion:   result.ConfigVersion,
+		IsGlobalDomain:      result.IsGlobalDomain,
+		FailoverVersion:     result.FailoverVersion,
+		ConfigVersion:       result.ConfigVersion,
+		NotificationVersion: dbVersion,
 	}, nil
-
-	// int to bool conversions
-	//int2bool := func(key string) bool {
-	//	if result[key].(int64) == 1 {
-	//		return true
-	//	}
-	//	return false
-	//}
-
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
-	// Caveat. The Cassandra persistence implementation has the following logic for how to fill in
-	// the "db version" bindings for the update query:
-	// if request.DBVersion <= 0, then (currentVersion, nextVersion) = (nil, 1)
-	// else, (currentVersion, nextVersion) = (request.DBVersion, request.DBVersion + 1)
-
 	clusters, err := gobSerialize(serializeClusterConfigs(request.ReplicationConfig.Clusters))
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -332,10 +310,9 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 	}
 
 	queryToUse := templateUpdateDomainWhereCurrentVersionIsNullSqlQuery
-	if request.DBVersion > 0 {
+	if request.NotificationVersion > 0 {
 		queryToUse = templateUpdateDomainWhereCurrentVersionIsIntSqlQuery
 	}
-
 	_, err = m.db.NamedExec(queryToUse, &flatUpdateDomainRequest{
 		DomainInfo:        *(request.Info),
 		DomainConfig:      *(request.Config),
@@ -343,8 +320,8 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 		Clusters:          clusters,
 		ConfigVersion:     request.ConfigVersion,
 		FailoverVersion:   request.FailoverVersion,
-		CurrentDBVersion:  request.DBVersion,
-		NextDBVersion:     request.DBVersion + 1,
+		CurrentDBVersion:  request.NotificationVersion,
+		NextDBVersion:     request.NotificationVersion + 1,
 	})
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -359,20 +336,24 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 
 func (m *sqlMetadataManager) DeleteDomain(request *DeleteDomainRequest) error {
 	if _, err := m.db.NamedExec(templateDeleteDomainByIdSqlQuery, request); err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("DeleteDomain operation failed. Error %v", err),
-			}
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("DeleteDomain operation failed. Error %v", err),
 		}
-		return nil
+	}
+	return nil
 }
 
 func (m *sqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameRequest) error {
 	if _, err := m.db.NamedExec(templateDeleteDomainByNameSqlQuery, request); err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("DeleteDomainByName operation failed. Error %v", err),
-			}
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("DeleteDomainByName operation failed. Error %v", err),
 		}
-		return nil
+	}
+	return nil
+}
+
+func (m *sqlMetadataManager) GetMetadata() (*GetMetadataResponse, error) {
+	panic("implement me")
 }
 
 // NewMysqlMetadataPersistence creates an instance of sqlMetadataManager

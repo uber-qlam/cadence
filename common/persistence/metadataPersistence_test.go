@@ -45,6 +45,8 @@ type (
 
 func TestMetadataPersistenceSuite(t *testing.T) {
 	s := new(metadataPersistenceSuite)
+	s.UseMysql = false
+	suite.Run(t, s)
 	s.UseMysql = true
 	suite.Run(t, s)
 }
@@ -140,6 +142,10 @@ func (m *metadataPersistenceSuite) TestCreateDomain() {
 	m.NotNil(err2)
 	m.IsType(&gen.DomainAlreadyExistsError{}, err2)
 	m.Nil(resp2)
+
+	resp3, err3 := m.GetDomain("", "")
+	m.Nil(resp3)
+	m.IsType(&gen.BadRequestError{}, err3)
 }
 
 func (m *metadataPersistenceSuite) TestGetDomain() {
