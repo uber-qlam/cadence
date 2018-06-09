@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS domains(
   emit_metric TINYINT(1) NOT NULL,
 /* end domain_config */
   config_version BIGINT NOT NULL,
-  db_version BIGINT,
+  notification_version BIGINT NOT NULL,
+  failover_notification_version BIGINT NOT NULL,
 /* domain */
   name VARCHAR(255) PRIMARY KEY NOT NULL,
   status INT NOT NULL,

@@ -806,8 +806,8 @@ type (
 
 	// DomainReplicationConfig describes the cross DC domain replication configuration
 	DomainReplicationConfig struct {
-		ActiveClusterName string                      `db:"active_cluster_name"'`
-		Clusters          []*ClusterReplicationConfig `db:"clusters"`
+		ActiveClusterName string
+		Clusters          []*ClusterReplicationConfig
 	}
 
 	// ClusterReplicationConfig describes the cross DC cluster replication configuration

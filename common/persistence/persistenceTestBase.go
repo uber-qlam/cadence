@@ -219,6 +219,8 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
+		s.MetadataManagerV2 = s.MetadataManager
+
 		db, err := sqlx.Connect("mysql",
 			"uber:uber@tcp(localhost:3306)/catalyst_test")
 		if err != nil {

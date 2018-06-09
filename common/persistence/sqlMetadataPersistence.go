@@ -36,34 +36,51 @@ type (
 		db *sqlx.DB
 	}
 
-	// domainRow is a flattened version of CreateDomainRequest
-	// but it also contains a DBVersion row.
-	domainRow struct {
+	FlatCommon struct {
 		DomainInfo
 		DomainConfig
-		ActiveClusterName string        `db:"active_cluster_name"`
-		Clusters          []byte        `db:"clusters"`
-		IsGlobalDomain    bool          `db:"is_global_domain"`
-		ConfigVersion     int64         `db:"config_version"`
-		FailoverVersion   int64         `db:"failover_version"`
-		DBVersion         sql.NullInt64 `db:"db_version"`
-	}
 
-	// flatUpdateDomainRequest is a flattened version of UpdateDomainRequest
-	flatUpdateDomainRequest struct {
-		DomainInfo
-		DomainConfig
 		ActiveClusterName string `db:"active_cluster_name"`
 		Clusters          []byte `db:"clusters"`
-		ConfigVersion     int64  `db:"config_version"`
-		FailoverVersion   int64  `db:"failover_version"`
-		CurrentDBVersion  int64  `db:"current_db_version"`
-		NextDBVersion     int64  `db:"next_db_version"`
+
+		ConfigVersion   int64 `db:"config_version"`
+		FailoverVersion int64 `db:"failover_version"`
 	}
+
+	FlatUpdateDomainRequest struct {
+		FlatCommon
+
+		FailoverNotificationVersion int64 `db:"failover_notification_version"`
+		NotificationVersion         int64 `db:"notification_version"`
+	}
+
+	flatCreateDomainRequest struct {
+		FlatCommon
+		IsGlobalDomain bool `db:"is_global_domain"`
+	}
+
+	flatGetDomainResponse struct {
+		FlatUpdateDomainRequest
+		IsGlobalDomain bool `db:"is_global_domain"`
+	}
+
+	domainRow = flatGetDomainResponse
 )
 
 func (m *sqlMetadataManager) ListDomain(request *ListDomainRequest) (*ListDomainResponse, error) {
-	panic("implement me")
+
+	var rows []*domainRow
+
+	m.db.Select(&rows, templateListDomainSqlQuery)
+
+	var domains []*GetDomainResponse
+	for _, row := range rows {
+		domains = append(domains, domainRowToGetDomainResponse(row))
+	}
+
+	return &ListDomainResponse{
+		Domains: domains,
+	}, nil
 }
 
 const (
@@ -80,7 +97,8 @@ const (
 		is_global_domain,
 		active_cluster_name, 
 		clusters, 
-db_version
+		notification_version,
+		failover_notification_version
 		)
 		VALUES(
 		:id,
@@ -95,7 +113,8 @@ db_version
 		:is_global_domain,
 		:active_cluster_name, 
 		:clusters,
-:db_version
+		:notification_version,
+		:failover_notification_version
 		)`
 
 	getDomainPart = `SELECT
@@ -111,7 +130,8 @@ db_version
 		is_global_domain,
 		active_cluster_name, 
 		clusters,
-		db_version
+		notification_version,
+		failover_notification_version
 FROM domains
 `
 	templateGetDomainByIdSqlQuery = getDomainPart +
@@ -119,7 +139,7 @@ FROM domains
 	templateGetDomainByNameSqlQuery = getDomainPart +
 		`WHERE name = :name`
 
-	updateDomainPart = `UPDATE domains
+	templateUpdateDomainSqlQuery = `UPDATE domains
 SET
 		id = :id,
 		retention_days = :retention_days, 
@@ -132,18 +152,18 @@ SET
 		failover_version = :failover_version, 
 		active_cluster_name = :active_cluster_name,  
 		clusters = :clusters,
-		db_version = :next_db_version
+		notification_version = :notification_version,
+		failover_notification_version = :failover_notification_version
 WHERE
-name = :name
-AND
-`
-	templateUpdateDomainWhereCurrentVersionIsNullSqlQuery = updateDomainPart +
-		`db_version IS NULL`
-	templateUpdateDomainWhereCurrentVersionIsIntSqlQuery = updateDomainPart +
-		`db_version = :current_db_version`
+name = :name`
 
 	templateDeleteDomainByIdSqlQuery   = `DELETE FROM domains WHERE id = :id`
 	templateDeleteDomainByNameSqlQuery = `DELETE FROM domains WHERE name = :name`
+
+	templateListDomainSqlQuery  = getDomainPart
+	templateGetMetadataSqlQuery = `SELECT notification_version
+FROM domains
+WHERE name = :name`
 )
 
 func (m *sqlMetadataManager) Close() {
@@ -197,21 +217,34 @@ func (m *sqlMetadataManager) CreateDomain(request *CreateDomainRequest) (*Create
 			}
 		}
 
+		metadata, err := m.GetMetadata()
+		if err != nil {
+			return nil, err
+		}
+
 		if _, err := tx.NamedExec(templateCreateDomainSqlQuery, &domainRow{
-			DomainInfo:   *(request.Info),
-			DomainConfig: *(request.Config),
-			// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
-			// TODO DomainReplicationConfig.Clusters
+			FlatUpdateDomainRequest: FlatUpdateDomainRequest{
+				FlatCommon: FlatCommon{
+					DomainInfo:   *(request.Info),
+					DomainConfig: *(request.Config),
+					// TODO Extracting the fields from DomainReplicationConfig since we don't currently support
+					// TODO DomainReplicationConfig.Clusters
 
-			//DomainReplicationConfig: *(request.ReplicationConfig),
-			ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
-			Clusters:          clusters,
+					//DomainReplicationConfig: *(request.ReplicationConfig),
+					ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
+					Clusters:          clusters,
 
-			// TODO
+					// TODO
 
-			IsGlobalDomain:  request.IsGlobalDomain,
-			ConfigVersion:   request.ConfigVersion,
-			FailoverVersion: request.FailoverVersion,
+					ConfigVersion:   request.ConfigVersion,
+					FailoverVersion: request.FailoverVersion,
+				},
+
+				NotificationVersion:         metadata.NotificationVersion,
+				FailoverNotificationVersion: initialFailoverNotificationVersion,
+			},
+
+			IsGlobalDomain: request.IsGlobalDomain,
 		}); err != nil {
 			print(err.Error())
 			return nil, &workflow.InternalServiceError{
@@ -274,16 +307,16 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 			}
 
 		}
-
 	}
 
+	return domainRowToGetDomainResponse(&result), nil
+}
+
+func domainRowToGetDomainResponse(result *domainRow) *GetDomainResponse {
 	var clusters []map[string]interface{}
-	err = gobDeserialize(result.Clusters, &clusters)
 
-	var dbVersion int64
-	if result.DBVersion.Valid {
-		dbVersion = result.DBVersion.Int64
-	}
+	// TODO: Handle deserialization error.
+	gobDeserialize(result.Clusters, &clusters)
 
 	return &GetDomainResponse{
 		Info:   &result.DomainInfo,
@@ -293,11 +326,12 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 				result.ActiveClusterName), // TODO TO BE IMPLEMENTED (get rid of "active" placeholder)
 			Clusters: GetOrUseDefaultClusters("active", deserializeClusterConfigs(clusters)), // TODO same
 		},
-		IsGlobalDomain:      result.IsGlobalDomain,
-		FailoverVersion:     result.FailoverVersion,
-		ConfigVersion:       result.ConfigVersion,
-		NotificationVersion: dbVersion,
-	}, nil
+		IsGlobalDomain:              result.IsGlobalDomain,
+		FailoverVersion:             result.FailoverVersion,
+		ConfigVersion:               result.ConfigVersion,
+		NotificationVersion:         result.NotificationVersion,
+		FailoverNotificationVersion: result.FailoverNotificationVersion,
+	}
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
@@ -308,19 +342,23 @@ func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
 		}
 	}
 
-	queryToUse := templateUpdateDomainWhereCurrentVersionIsNullSqlQuery
-	if request.NotificationVersion > 0 {
-		queryToUse = templateUpdateDomainWhereCurrentVersionIsIntSqlQuery
-	}
-	_, err = m.db.NamedExec(queryToUse, &flatUpdateDomainRequest{
-		DomainInfo:        *(request.Info),
-		DomainConfig:      *(request.Config),
-		ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
-		Clusters:          clusters,
-		ConfigVersion:     request.ConfigVersion,
-		FailoverVersion:   request.FailoverVersion,
-		CurrentDBVersion:  request.NotificationVersion,
-		NextDBVersion:     request.NotificationVersion + 1,
+	//queryToUse := templateUpdateDomainWhereCurrentVersionIsNullSqlQuery
+	//if request.NotificationVersion > 0 {
+	//	queryToUse = templateUpdateDomainWhereCurrentVersionIsIntSqlQuery
+	//}
+
+	_, err = m.db.NamedExec(templateUpdateDomainSqlQuery, &FlatUpdateDomainRequest{
+		FlatCommon: FlatCommon{
+			DomainInfo:   *(request.Info),
+			DomainConfig: *(request.Config),
+
+			ActiveClusterName: request.ReplicationConfig.ActiveClusterName,
+			Clusters:          clusters,
+			ConfigVersion:     request.ConfigVersion,
+			FailoverVersion:   request.FailoverVersion,
+		},
+		FailoverNotificationVersion: request.FailoverNotificationVersion,
+		NotificationVersion:         request.NotificationVersion,
 	})
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -352,7 +390,25 @@ func (m *sqlMetadataManager) DeleteDomainByName(request *DeleteDomainByNameReque
 }
 
 func (m *sqlMetadataManager) GetMetadata() (*GetMetadataResponse, error) {
-	panic("implement me")
+	stmt, err := m.db.PrepareNamed(templateGetMetadataSqlQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	var notificationVersion int64
+	var result struct {
+		NotificationVersion int64 `db:"notification_version"`
+	}
+	err = stmt.Get(&result, struct {
+		Name string `db:"name"`
+	}{domainMetadataRecordName})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &GetMetadataResponse{NotificationVersion: 0}, nil
+		}
+		return nil, err
+	}
+	return &GetMetadataResponse{NotificationVersion: notificationVersion}, nil
 }
 
 // NewMysqlMetadataPersistence creates an instance of sqlMetadataManager
