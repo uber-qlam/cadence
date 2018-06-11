@@ -790,18 +790,18 @@ type (
 
 	// DomainInfo describes the domain entity
 	DomainInfo struct {
-		ID          string
-		Name        string
-		Status      int
-		Description string
-		OwnerEmail  string
+		ID          string `db:"id"`
+		Name        string `db:"name"`
+		Status      int    `db:"status"`
+		Description string `db:"description"`
+		OwnerEmail  string `db:"owner_email"`
 	}
 
 	// DomainConfig describes the domain configuration
 	DomainConfig struct {
 		// NOTE: this retention is in days, not in seconds
-		Retention  int32
-		EmitMetric bool
+		Retention  int32 `db:"retention_days"`
+		EmitMetric bool  `db:"emit_metric"`
 	}
 
 	// DomainReplicationConfig describes the cross DC domain replication configuration
@@ -863,12 +863,12 @@ type (
 
 	// DeleteDomainRequest is used to delete domain entry from domains table
 	DeleteDomainRequest struct {
-		ID string
+		ID string `db:"id"`
 	}
 
 	// DeleteDomainByNameRequest is used to delete domain entry from domains_by_name table
 	DeleteDomainByNameRequest struct {
-		Name string
+		Name string `db:"name"`
 	}
 
 	// ListDomainRequest is used to list domains
