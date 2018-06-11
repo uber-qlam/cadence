@@ -22,13 +22,14 @@ package persistence
 
 import (
 	"fmt"
-	_ "github.com/go-sql-driver/mysql" // MySQL driver
-	"github.com/jmoiron/sqlx"
-
 	"bytes"
 	"database/sql"
 	"encoding/gob"
+
 	workflow "github.com/uber/cadence/.gen/go/shared"
+
+	_ "github.com/go-sql-driver/mysql" // MySQL driver
+	"github.com/jmoiron/sqlx"
 )
 
 type (

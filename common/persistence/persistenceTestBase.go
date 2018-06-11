@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"io/ioutil"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common"
@@ -37,7 +38,6 @@ import (
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/uber-common/bark"
-	"io/ioutil"
 )
 
 const (
