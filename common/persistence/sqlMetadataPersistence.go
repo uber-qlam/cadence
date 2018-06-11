@@ -39,17 +39,14 @@ type (
 	FlatCommon struct {
 		DomainInfo
 		DomainConfig
-
 		ActiveClusterName string `db:"active_cluster_name"`
 		Clusters          []byte `db:"clusters"`
-
-		ConfigVersion   int64 `db:"config_version"`
-		FailoverVersion int64 `db:"failover_version"`
+		ConfigVersion     int64  `db:"config_version"`
+		FailoverVersion   int64  `db:"failover_version"`
 	}
 
 	FlatUpdateDomainRequest struct {
 		FlatCommon
-
 		FailoverNotificationVersion int64 `db:"failover_notification_version"`
 		NotificationVersion         int64 `db:"notification_version"`
 	}
@@ -75,7 +72,13 @@ func (m *sqlMetadataManager) ListDomain(request *ListDomainRequest) (*ListDomain
 
 	var domains []*GetDomainResponse
 	for _, row := range rows {
-		domains = append(domains, domainRowToGetDomainResponse(row))
+		resp, err := domainRowToGetDomainResponse(row)
+		if err != nil {
+			return &ListDomainResponse{
+				Domains: domains,
+			}, err
+		}
+		domains = append(domains, resp)
 	}
 
 	return &ListDomainResponse{
@@ -309,14 +312,15 @@ func (m *sqlMetadataManager) GetDomain(request *GetDomainRequest) (*GetDomainRes
 		}
 	}
 
-	return domainRowToGetDomainResponse(&result), nil
+	return domainRowToGetDomainResponse(&result)
 }
 
-func domainRowToGetDomainResponse(result *domainRow) *GetDomainResponse {
+func domainRowToGetDomainResponse(result *domainRow) (*GetDomainResponse, error) {
 	var clusters []map[string]interface{}
 
-	// TODO: Handle deserialization error.
-	gobDeserialize(result.Clusters, &clusters)
+	if err := gobDeserialize(result.Clusters, &clusters); err != nil {
+		return nil, err
+	}
 
 	return &GetDomainResponse{
 		Info:   &result.DomainInfo,
@@ -331,7 +335,7 @@ func domainRowToGetDomainResponse(result *domainRow) *GetDomainResponse {
 		ConfigVersion:               result.ConfigVersion,
 		NotificationVersion:         result.NotificationVersion,
 		FailoverNotificationVersion: result.FailoverNotificationVersion,
-	}
+	}, nil
 }
 
 func (m *sqlMetadataManager) UpdateDomain(request *UpdateDomainRequest) error {
