@@ -144,11 +144,9 @@ FROM domains
 
 	templateUpdateDomainSqlQuery = `UPDATE domains
 SET
-		id = :id,
 		retention_days = :retention_days, 
 		emit_metric = :emit_metric,
 		config_version = :config_version,
-		name = :name, 
 		status = :status, 
 		description = :description, 
 		owner_email = :owner_email,
@@ -158,7 +156,8 @@ SET
 		notification_version = :notification_version,
 		failover_notification_version = :failover_notification_version
 WHERE
-name = :name`
+name = :name AND
+id = :id`
 
 	templateDeleteDomainByIdSqlQuery   = `DELETE FROM domains WHERE id = :id`
 	templateDeleteDomainByNameSqlQuery = `DELETE FROM domains WHERE name = :name`
