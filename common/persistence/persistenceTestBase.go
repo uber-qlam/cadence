@@ -21,12 +21,12 @@
 package persistence
 
 import (
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
-	"io/ioutil"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common"

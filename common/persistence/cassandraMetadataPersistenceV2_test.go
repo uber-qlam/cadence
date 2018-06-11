@@ -24,12 +24,13 @@ import (
 	"os"
 	"testing"
 
+	gen "github.com/uber/cadence/.gen/go/shared"
+	"github.com/uber/cadence/common/cluster"
+
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	gen "github.com/uber/cadence/.gen/go/shared"
-	"github.com/uber/cadence/common/cluster"
 )
 
 type (
