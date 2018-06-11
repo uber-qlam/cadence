@@ -1,5 +1,5 @@
-hash: 7df821f65e371f25bc9854402b10c5f3d71b921eaf4e0d81c457882a3df5caf1
-updated: 2018-06-05T11:53:33.667446-07:00
+hash: 7066575eb2ceabcd797c59f6105f28ae5a536cddf1908afae3492e1118d6fcee
+updated: 2018-06-11T10:04:22.948683276-07:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -44,6 +44,8 @@ imports:
   version: 600d898af40aa09a7a93ecb9265d87b0504b6f03
 - name: github.com/fatih/color
   version: 507f6050b8568533fb3f5504de8e5205fa62a114
+- name: github.com/go-sql-driver/mysql
+  version: e333f778f290654339e13bbc63d2dd4e8de23b67
 - name: github.com/gocql/gocql
   version: ca7d33956650d92d29e6db7fe901e23d0f0e3359
   subpackages:
@@ -62,6 +64,10 @@ imports:
   version: 553a641470496b2327abcac10b36396bd98e45c9
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
+- name: github.com/jmoiron/sqlx
+  version: 2aeb6a910c2b94f2d5eb53d9895d80e27264ec41
+  subpackages:
+  - reflectx
 - name: github.com/mattn/go-colorable
   version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
 - name: github.com/mattn/go-isatty
@@ -263,7 +269,7 @@ imports:
   - internal/exit
   - zapcore
 - name: golang.org/x/net
-  version: 1e491301e022f8f977054da4c2d852decd59571f
+  version: 9ef9f5bb98a1fdc41f8cf6c250a4404b4085e389
   repo: https://github.com/golang/net
   subpackages:
   - bpf
@@ -281,6 +287,10 @@ imports:
   version: 6dc17368e09b0e8634d71cac8168d853e869a0c7
   subpackages:
   - rate
+- name: google.golang.org/appengine
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  subpackages:
+  - cloudsql
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/validator.v2
