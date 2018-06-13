@@ -33,6 +33,7 @@ import (
 	"github.com/uber/cadence/common/cluster"
 	"github.com/uber/cadence/common/logging"
 
+	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/jmoiron/sqlx"
 	"github.com/pborman/uuid"
@@ -69,6 +70,11 @@ type (
 		// when crtoss DC is public, remove EnableGlobalDomain
 		EnableGlobalDomain bool
 		IsMasterCluster    bool
+		SqlHost            string
+		SqlPort            int
+		SqlUser            string
+		SqlPassword        string
+		SqlDatabase        string
 	}
 
 	// TestBase wraps the base setup needed to create workflows over persistence layer.
@@ -89,6 +95,7 @@ type (
 		replicationReadLevel int64
 		CassandraTestCluster
 		UseMysql bool
+		SqlDsn   string
 	}
 
 	// CassandraTestCluster allows executing cassandra operations in testing.
@@ -116,6 +123,8 @@ func (g *testTransferTaskIDGenerator) GetNextTransferTaskID() (int64, error) {
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
 func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metadata cluster.Metadata) {
+	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
+
 	if !s.UseMysql {
 		log := bark.NewLoggerFromLogrus(log.New())
 
@@ -186,8 +195,6 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		s.TaskIDGenerator = &testTransferTaskIDGenerator{}
-
 		// Create a shard for test
 		s.readLevel = 0
 		s.replicationReadLevel = 0
@@ -208,12 +215,10 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err1)
 		}
 	} else {
+		s.SqlDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", options.SqlUser, options.SqlPassword, options.SqlHost, options.SqlPort, options.SqlDatabase)
+
 		var err error
-		s.MetadataManager, err = NewMysqlMetadataPersistence("uber",
-			"uber",
-			"localhost",
-			"3306",
-			"catalyst_test")
+		s.MetadataManager, err = NewMysqlMetadataPersistence(options.SqlUser, options.SqlPassword, options.SqlHost, options.SqlPort, options.SqlDatabase)
 
 		if err != nil {
 			log.Fatal(err)
@@ -222,18 +227,29 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		s.MetadataManagerV2 = s.MetadataManager
 
 		db, err := sqlx.Connect("mysql",
-			"uber:uber@tcp(localhost:3306)/catalyst_test")
+			s.SqlDsn)
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer db.Close()
 
-		file, err := ioutil.ReadFile("./sql/domains.sql")
+		for _, filename := range []string{
+			"./sql/domains.sql",
+			"./sql/executions.sql",
+		} {
+			file, err := ioutil.ReadFile(filename)
+			if err != nil {
+				log.Fatal(err)
+			}
+			db.MustExec(string(file))
+		}
+
+		s.ShardInfo = &ShardInfo{}
+
+		s.WorkflowMgr, err = NewSqlWorkflowExecutionPersistence(s.SqlDsn)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		db.MustExec(string(file))
-		db.Close()
 	}
 }
 
@@ -1067,6 +1083,11 @@ func (s *TestBase) SetupWorkflowStore() {
 		ClusterPassword:    testPassword,
 		DropKeySpace:       true,
 		EnableGlobalDomain: false,
+		SqlUser:            "uber",
+		SqlPassword:        "uber",
+		SqlDatabase:        "catalyst_test",
+		SqlHost:            "localhost",
+		SqlPort:            3306,
 	}, nil)
 }
 
@@ -1074,12 +1095,13 @@ func (s *TestBase) SetupWorkflowStore() {
 func (s *TestBase) TearDownWorkflowStore() {
 	if s.UseMysql {
 		db, err := sqlx.Connect("mysql",
-			"uber:uber@tcp(localhost:3306)/catalyst_test")
+			s.SqlDsn)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		db.MustExec(`drop table domains`)
+		db.MustExec(`drop table if exists domains`)
+		db.MustExec(`drop table if exists executions`)
 		db.Close()
 	} else {
 		s.CassandraTestCluster.tearDownTestCluster()

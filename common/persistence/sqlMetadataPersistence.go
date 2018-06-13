@@ -21,10 +21,10 @@
 package persistence
 
 import (
-	"fmt"
 	"bytes"
 	"database/sql"
 	"encoding/gob"
+	"fmt"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
 
@@ -416,9 +416,9 @@ func (m *sqlMetadataManager) GetMetadata() (*GetMetadataResponse, error) {
 }
 
 // NewMysqlMetadataPersistence creates an instance of sqlMetadataManager
-func NewMysqlMetadataPersistence(username, password, host, port, dbName string) (MetadataManager, error) {
+func NewMysqlMetadataPersistence(username, password, host string, port int, dbName string) (MetadataManager, error) {
 	var db, err = sqlx.Connect("mysql",
-		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
+		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, dbName))
 	if err != nil {
 		return nil, err
 	}
