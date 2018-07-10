@@ -1444,16 +1444,6 @@ func (h *SerializedHistoryEventBatch) String() string {
 		h.EncodingType, h.Version, string(h.Data))
 }
 
-func (config *ClusterReplicationConfig) serialize() map[string]interface{} {
-	output := make(map[string]interface{})
-	output["cluster_name"] = config.ClusterName
-	return output
-}
-
-func (config *ClusterReplicationConfig) deserialize(input map[string]interface{}) {
-	config.ClusterName = input["cluster_name"].(string)
-}
-
 // SetSerializedHistoryDefaults  sets the version and encoding types to defaults if they
 // are missing from persistence. This is purely for backwards compatibility
 func SetSerializedHistoryDefaults(history *SerializedHistoryEventBatch) {
@@ -1463,4 +1453,36 @@ func SetSerializedHistoryDefaults(history *SerializedHistoryEventBatch) {
 	if len(history.EncodingType) == 0 {
 		history.EncodingType = DefaultEncodingType
 	}
+}
+
+// SerializeClusterConfigs makes an array of *ClusterReplicationConfig serializable
+// by flattening them into map[string]interface{}
+func SerializeClusterConfigs(replicationConfigs []*ClusterReplicationConfig) []map[string]interface{} {
+	seriaizedReplicationConfigs := []map[string]interface{}{}
+	for index := range replicationConfigs {
+		seriaizedReplicationConfigs = append(seriaizedReplicationConfigs, replicationConfigs[index].serialize())
+	}
+	return seriaizedReplicationConfigs
+}
+
+// DeserializeClusterConfigs creates an array of ClusterReplicationConfigs from an array of map representations
+func DeserializeClusterConfigs(replicationConfigs []map[string]interface{}) []*ClusterReplicationConfig {
+	deseriaizedReplicationConfigs := []*ClusterReplicationConfig{}
+	for index := range replicationConfigs {
+		deseriaizedReplicationConfig := &ClusterReplicationConfig{}
+		deseriaizedReplicationConfig.deserialize(replicationConfigs[index])
+		deseriaizedReplicationConfigs = append(deseriaizedReplicationConfigs, deseriaizedReplicationConfig)
+	}
+
+	return deseriaizedReplicationConfigs
+}
+
+func (config *ClusterReplicationConfig) serialize() map[string]interface{} {
+	output := make(map[string]interface{})
+	output["cluster_name"] = config.ClusterName
+	return output
+}
+
+func (config *ClusterReplicationConfig) deserialize(input map[string]interface{}) {
+	config.ClusterName = input["cluster_name"].(string)
 }

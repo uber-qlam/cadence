@@ -18,13 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package persistence
+package cassandra
 
 import (
 	"github.com/gocql/gocql"
 	"github.com/uber-common/bark"
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/metrics"
+	"github.com/uber/cadence/common/persistence"
 )
 
 type (
@@ -37,7 +38,7 @@ type (
 
 // NewCassandraPersistenceClientFactory is used to create an instance of ExecutionManagerFactory implementation
 func NewCassandraPersistenceClientFactory(hosts string, port int, user, password, dc string, keyspace string,
-	numConns int, logger bark.Logger, metricsClient metrics.Client) (ExecutionManagerFactory, error) {
+	numConns int, logger bark.Logger, metricsClient metrics.Client) (persistence.ExecutionManagerFactory, error) {
 	cluster := common.NewCassandraCluster(hosts, port, user, password, dc)
 	cluster.Keyspace = keyspace
 	cluster.ProtoVersion = cassandraProtoVersion
@@ -55,7 +56,7 @@ func NewCassandraPersistenceClientFactory(hosts string, port int, user, password
 }
 
 // CreateExecutionManager implements ExecutionManagerFactory interface
-func (f *cassandraPersistenceClientFactory) CreateExecutionManager(shardID int) (ExecutionManager, error) {
+func (f *cassandraPersistenceClientFactory) CreateExecutionManager(shardID int) (persistence.ExecutionManager, error) {
 	mgr, err := NewCassandraWorkflowExecutionPersistence(shardID, f.session, f.logger)
 
 	if err != nil {
@@ -66,7 +67,7 @@ func (f *cassandraPersistenceClientFactory) CreateExecutionManager(shardID int) 
 		return mgr, nil
 	}
 
-	return NewWorkflowExecutionPersistenceClient(mgr, f.metricsClient, f.logger), nil
+	return persistence.NewWorkflowExecutionPersistenceClient(mgr, f.metricsClient, f.logger), nil
 }
 
 // Close releases the underlying resources held by this object
