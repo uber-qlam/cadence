@@ -182,7 +182,7 @@ func (s *Service) Start() {
 
 	s.metricsClient = base.GetMetricsClient()
 
-	shardMgr, err := cassandra.NewCassandraShardPersistence(p.CassandraConfig.Hosts,
+	shardMgr, err := cassandra.NewShardPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,
@@ -214,7 +214,7 @@ func (s *Service) Start() {
 	}
 	metadata = persistence.NewMetadataPersistenceClient(metadata, base.GetMetricsClient(), log)
 
-	visibility, err := cassandra.NewCassandraVisibilityPersistence(p.CassandraConfig.Hosts,
+	visibility, err := cassandra.NewVisibilityPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,
@@ -227,7 +227,7 @@ func (s *Service) Start() {
 	}
 	visibility = persistence.NewVisibilityPersistenceClient(visibility, base.GetMetricsClient(), log)
 
-	history, err := cassandra.NewCassandraHistoryPersistence(p.CassandraConfig.Hosts,
+	history, err := cassandra.NewHistoryPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,
@@ -241,7 +241,7 @@ func (s *Service) Start() {
 	}
 	history = persistence.NewHistoryPersistenceClient(history, base.GetMetricsClient(), log)
 
-	execMgrFactory, err := cassandra.NewCassandraPersistenceClientFactory(p.CassandraConfig.Hosts,
+	execMgrFactory, err := cassandra.NewPersistenceClientFactory(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,

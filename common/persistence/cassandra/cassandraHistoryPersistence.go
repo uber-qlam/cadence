@@ -61,8 +61,8 @@ type (
 	}
 )
 
-// NewCassandraHistoryPersistence is used to create an instance of HistoryManager implementation
-func NewCassandraHistoryPersistence(hosts string, port int, user, password, dc string, keyspace string,
+// NewHistoryPersistence is used to create an instance of HistoryManager implementation
+func NewHistoryPersistence(hosts string, port int, user, password, dc string, keyspace string,
 	numConns int, logger bark.Logger) (persistence.HistoryManager,
 	error) {
 	cluster := common.NewCassandraCluster(hosts, port, user, password, dc)

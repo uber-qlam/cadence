@@ -41,11 +41,11 @@ type (
 // NewMetadataManagerProxy is used for merging the functionality the v1 and v2 MetadataManager
 func NewMetadataManagerProxy(hosts string, port int, user, password, dc string, keyspace string,
 	currentClusterName string, logger bark.Logger) (persistence.MetadataManager, error) {
-	metadataMgr, err := NewCassandraMetadataPersistence(hosts, port, user, password, dc, keyspace, currentClusterName, logger)
+	metadataMgr, err := NewMetadataPersistence(hosts, port, user, password, dc, keyspace, currentClusterName, logger)
 	if err != nil {
 		return nil, err
 	}
-	metadataMgrV2, err := NewCassandraMetadataPersistenceV2(hosts, port, user, password, dc, keyspace, currentClusterName, logger)
+	metadataMgrV2, err := NewMetadataPersistenceV2(hosts, port, user, password, dc, keyspace, currentClusterName, logger)
 	if err != nil {
 		return nil, err
 	}

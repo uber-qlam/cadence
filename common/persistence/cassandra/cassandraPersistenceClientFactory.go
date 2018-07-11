@@ -36,8 +36,8 @@ type (
 	}
 )
 
-// NewCassandraPersistenceClientFactory is used to create an instance of ExecutionManagerFactory implementation
-func NewCassandraPersistenceClientFactory(hosts string, port int, user, password, dc string, keyspace string,
+// NewPersistenceClientFactory is used to create an instance of ExecutionManagerFactory implementation
+func NewPersistenceClientFactory(hosts string, port int, user, password, dc string, keyspace string,
 	numConns int, logger bark.Logger, metricsClient metrics.Client) (persistence.ExecutionManagerFactory, error) {
 	cluster := common.NewCassandraCluster(hosts, port, user, password, dc)
 	cluster.Keyspace = keyspace
@@ -57,7 +57,7 @@ func NewCassandraPersistenceClientFactory(hosts string, port int, user, password
 
 // CreateExecutionManager implements ExecutionManagerFactory interface
 func (f *cassandraPersistenceClientFactory) CreateExecutionManager(shardID int) (persistence.ExecutionManager, error) {
-	mgr, err := NewCassandraWorkflowExecutionPersistence(shardID, f.session, f.logger)
+	mgr, err := NewWorkflowExecutionPersistence(shardID, f.session, f.logger)
 
 	if err != nil {
 		return nil, err

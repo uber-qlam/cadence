@@ -93,7 +93,7 @@ func (s *Service) Start() {
 
 	base := service.New(p)
 
-	taskPersistence, err := cassandra.NewCassandraTaskPersistence(p.CassandraConfig.Hosts,
+	taskPersistence, err := cassandra.NewTaskPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,

@@ -48,8 +48,6 @@ const (
 	emptyRunID                          = "30000000-0000-f000-f000-000000000000"
 	permanentRunID                      = "30000000-0000-f000-f000-000000000001"
 	transferTaskTypeTransferTargetRunID = "30000000-0000-f000-f000-000000000002"
-	// Special Workflow IDs
-	transferTaskTransferTargetWorkflowID = "20000000-0000-f000-f000-000000000001"
 	// Row Constants for Shard Row
 	rowTypeShardDomainID   = "10000000-1000-f000-f000-000000000000"
 	rowTypeShardWorkflowID = "20000000-1000-f000-f000-000000000000"
@@ -806,8 +804,8 @@ type (
 	}
 )
 
-// NewCassandraShardPersistence is used to create an instance of ShardManager implementation
-func NewCassandraShardPersistence(hosts string, port int, user, password, dc string, keyspace string,
+// NewShardPersistence is used to create an instance of ShardManager implementation
+func NewShardPersistence(hosts string, port int, user, password, dc string, keyspace string,
 	currentClusterName string, logger bark.Logger) (persistence.ShardManager, error) {
 	cluster := common.NewCassandraCluster(hosts, port, user, password, dc)
 	cluster.Keyspace = keyspace
@@ -824,14 +822,14 @@ func NewCassandraShardPersistence(hosts string, port int, user, password, dc str
 	return &cassandraPersistence{shardID: -1, session: session, currentClusterName: currentClusterName, logger: logger}, nil
 }
 
-// NewCassandraWorkflowExecutionPersistence is used to create an instance of workflowExecutionManager implementation
-func NewCassandraWorkflowExecutionPersistence(shardID int, session *gocql.Session,
+// NewWorkflowExecutionPersistence is used to create an instance of workflowExecutionManager implementation
+func NewWorkflowExecutionPersistence(shardID int, session *gocql.Session,
 	logger bark.Logger) (persistence.ExecutionManager, error) {
 	return &cassandraPersistence{shardID: shardID, session: session, logger: logger}, nil
 }
 
-// NewCassandraTaskPersistence is used to create an instance of TaskManager implementation
-func NewCassandraTaskPersistence(hosts string, port int, user, password, dc string, keyspace string,
+// NewTaskPersistence is used to create an instance of TaskManager implementation
+func NewTaskPersistence(hosts string, port int, user, password, dc string, keyspace string,
 	logger bark.Logger) (persistence.TaskManager, error) {
 	cluster := common.NewCassandraCluster(hosts, port, user, password, dc)
 	cluster.Keyspace = keyspace
@@ -2415,7 +2413,7 @@ func (d *cassandraPersistence) createTransferTasks(batch *gocql.Batch, transferT
 	for _, task := range transferTasks {
 		var taskList string
 		var scheduleID int64
-		targetWorkflowID := transferTaskTransferTargetWorkflowID
+		targetWorkflowID := persistence.TransferTaskTransferTargetWorkflowID
 		targetRunID := transferTaskTypeTransferTargetRunID
 		targetChildWorkflowOnly := false
 

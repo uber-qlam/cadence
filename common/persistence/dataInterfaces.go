@@ -99,6 +99,17 @@ const (
 	TaskTypeRetryTimer
 )
 
+const (
+	// InitialFailoverNotificationVersion is the initial failover version for a domain
+	InitialFailoverNotificationVersion int64 = 0
+)
+
+const (
+	// TransferTaskTransferTargetWorkflowID is the the dummy workflow ID for transfer tasks of types
+	// that do not have a target workflow
+	TransferTaskTransferTargetWorkflowID = "20000000-0000-f000-f000-000000000001"
+)
+
 type (
 	// ConditionFailedError represents a failed conditional put
 	ConditionFailedError struct {

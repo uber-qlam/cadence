@@ -81,7 +81,7 @@ type (
 
 	// TestBase wraps the base setup needed to create workflows over engine layer.
 	TestBase struct {
-		persistenceTests.TestBase
+		persistencetests.TestBase
 		ShardContext *TestShardContext
 	}
 )
@@ -357,7 +357,7 @@ func (s *TestShardContext) GetCurrentTime(cluster string) time.Time {
 }
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
-func (s *TestBase) SetupWorkflowStoreWithOptions(options persistenceTests.TestBaseOptions) {
+func (s *TestBase) SetupWorkflowStoreWithOptions(options persistencetests.TestBaseOptions) {
 	s.TestBase.SetupWorkflowStoreWithOptions(options, nil)
 	log := bark.NewLoggerFromLogrus(log.New())
 	config := NewConfig(dynamicconfig.NewNopCollection(), 1)

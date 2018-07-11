@@ -90,7 +90,7 @@ func (s *Service) Start() {
 	}
 	metadata = persistence.NewMetadataPersistenceClient(metadata, base.GetMetricsClient(), log)
 
-	visibility, err := cassandra.NewCassandraVisibilityPersistence(p.CassandraConfig.Hosts,
+	visibility, err := cassandra.NewVisibilityPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,
@@ -103,7 +103,7 @@ func (s *Service) Start() {
 	}
 	visibility = persistence.NewVisibilityPersistenceClient(visibility, base.GetMetricsClient(), log)
 
-	history, err := cassandra.NewCassandraHistoryPersistence(p.CassandraConfig.Hosts,
+	history, err := cassandra.NewHistoryPersistence(p.CassandraConfig.Hosts,
 		p.CassandraConfig.Port,
 		p.CassandraConfig.User,
 		p.CassandraConfig.Password,

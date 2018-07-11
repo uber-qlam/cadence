@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package persistenceTests
+package persistencetests
 
 import (
 	"io/ioutil"
@@ -137,12 +137,12 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		s.CassandraTestCluster.setupTestCluster(options)
 		shardID := 0
 		var err error
-		s.ShardMgr, err = cassandra.NewCassandraShardPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+		s.ShardMgr, err = cassandra.NewShardPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
 			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
 		if err != nil {
 			log.Fatal(err)
 		}
-		s.ExecutionMgrFactory, err = cassandra.NewCassandraPersistenceClientFactory(options.ClusterHost, options.ClusterPort,
+		s.ExecutionMgrFactory, err = cassandra.NewPersistenceClientFactory(options.ClusterHost, options.ClusterPort,
 			options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log, nil)
 		if err != nil {
 			log.Fatal(err)
@@ -152,26 +152,26 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		if err != nil {
 			log.Fatal(err)
 		}
-		s.TaskMgr, err = cassandra.NewCassandraTaskPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+		s.TaskMgr, err = cassandra.NewTaskPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
 			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace,
 			log)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		s.HistoryMgr, err = cassandra.NewCassandraHistoryPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+		s.HistoryMgr, err = cassandra.NewHistoryPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
 			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, 2, log)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		s.MetadataManager, err = cassandra.NewCassandraMetadataPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+		s.MetadataManager, err = cassandra.NewMetadataPersistence(options.ClusterHost, options.ClusterPort, options.ClusterUser,
 			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		s.MetadataManagerV2, err = cassandra.NewCassandraMetadataPersistenceV2(options.ClusterHost, options.ClusterPort, options.ClusterUser,
+		s.MetadataManagerV2, err = cassandra.NewMetadataPersistenceV2(options.ClusterHost, options.ClusterPort, options.ClusterUser,
 			options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, currentClusterName, log)
 		if err != nil {
 			log.Fatal(err)
@@ -183,7 +183,7 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		s.VisibilityMgr, err = cassandra.NewCassandraVisibilityPersistence(options.ClusterHost, options.ClusterPort,
+		s.VisibilityMgr, err = cassandra.NewVisibilityPersistence(options.ClusterHost, options.ClusterPort,
 			options.ClusterUser, options.ClusterPassword, options.Datacenter, s.CassandraTestCluster.keyspace, log)
 		if err != nil {
 			log.Fatal(err)
@@ -212,7 +212,7 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		}
 	} else {
 		var err error
-		s.MetadataManager, err = sql.NewMysqlMetadataPersistence("uber",
+		s.MetadataManager, err = sql.NewMetadataPersistence("uber",
 			"uber",
 			"localhost",
 			"3306",
@@ -433,7 +433,7 @@ func (s *TestBase) CreateChildWorkflowExecution(domainID string, workflowExecuti
 	return response, err
 }
 
-// Getpersistence.WorkflowExecutionInfo is a utility method to retrieve execution info
+// GetWorkflowExecutionInfo is a utility method to retrieve execution info
 func (s *TestBase) GetWorkflowExecutionInfo(domainID string, workflowExecution workflow.WorkflowExecution) (
 	*persistence.WorkflowMutableState, error) {
 	response, err := s.WorkflowMgr.GetWorkflowExecution(&persistence.GetWorkflowExecutionRequest{
