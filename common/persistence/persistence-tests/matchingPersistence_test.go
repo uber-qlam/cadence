@@ -52,6 +52,8 @@ var timePrecision = 2 * time.Millisecond
 
 func TestMatchingPersistenceSuite(t *testing.T) {
 	s := new(matchingPersistenceSuite)
+	// suite.Run(t, s)
+	s.UseMysql = true
 	suite.Run(t, s)
 }
 

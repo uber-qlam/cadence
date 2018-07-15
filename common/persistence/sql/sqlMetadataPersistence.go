@@ -21,9 +21,7 @@
 package sql
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/gob"
 	"fmt"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
@@ -164,31 +162,6 @@ func (m *sqlMetadataManager) Close() {
 	if m.db != nil {
 		m.db.Close()
 	}
-}
-
-func gobSerialize(x interface{}) ([]byte, error) {
-	b := bytes.Buffer{}
-	e := gob.NewEncoder(&b)
-	err := e.Encode(x)
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Error in serialization: %v", err),
-		}
-	}
-	return b.Bytes(), nil
-}
-
-func gobDeserialize(a []byte, x interface{}) error {
-	b := bytes.NewBuffer(a)
-	d := gob.NewDecoder(b)
-	err := d.Decode(x)
-
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Error in deserialization: %v", err),
-		}
-	}
-	return nil
 }
 
 func updateMetadata(tx *sqlx.Tx, oldNotificationVersion int64) error {

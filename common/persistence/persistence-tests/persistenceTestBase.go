@@ -119,6 +119,8 @@ func (g *testTransferTaskIDGenerator) GetNextTransferTaskID() (int64, error) {
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
 func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metadata cluster.Metadata) {
+	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
+
 	if !s.UseMysql {
 		log := bark.NewLoggerFromLogrus(log.New())
 
@@ -189,8 +191,6 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		s.TaskIDGenerator = &testTransferTaskIDGenerator{}
-
 		// Create a shard for test
 		s.readLevel = 0
 		s.replicationReadLevel = 0
@@ -212,17 +212,41 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		}
 	} else {
 		var err error
+
 		s.MetadataManager, err = sql.NewMetadataPersistence("uber",
 			"uber",
 			"localhost",
 			"3306",
 			"catalyst_test")
-
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		s.MetadataManagerV2 = s.MetadataManager
+
+		s.WorkflowMgr, err = sql.NewSqlMatchingPersistence("uber",
+			"uber",
+			"localhost",
+			"3306",
+			"catalyst_test")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.ShardInfo = &persistence.ShardInfo{
+		}
+
+		s.TaskMgr, err = sql.NewTaskPersistence("uber", "uber", "localhost", "3306", "catalyst_test")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.ShardMgr, err = sql.NewShardPersistence("uber", "uber", "localhost", "3306", "catalyst_test")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s.ClusterMetadata = cluster.GetTestClusterMetadata(false, false)
 
 		db, err := sqlx.Connect("mysql",
 			"uber:uber@tcp(localhost:3306)/catalyst_test?multiStatements=true&tx_isolation=%27READ-COMMITTED%27")
@@ -234,8 +258,14 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		db.MustExec(string(file))
+
+		file, err = ioutil.ReadFile("../sql/executions.sql")
+		if err != nil {
+			log.Fatal(err)
+		}
+		db.MustExec(string(file))
+
 		db.Close()
 	}
 }
@@ -1082,8 +1112,12 @@ func (s *TestBase) TearDownWorkflowStore() {
 			log.Fatal(err)
 		}
 
-		db.MustExec(`drop table domains`)
-		db.MustExec(`drop table domain_metadata`)
+		for _, s := range []string{"domains",
+		"domain_metadata",
+		"executions",
+		"transfer_tasks"} {
+			db.MustExec("drop table if exists " + s)
+		}
 		db.Close()
 	} else {
 		s.CassandraTestCluster.tearDownTestCluster()
