@@ -521,7 +521,7 @@ func (m *sqlMetadataManager) GetMetadata() (*persistence.GetMetadataResponse, er
 // NewMetadataPersistence creates an instance of sqlMetadataManager
 func NewMetadataPersistence(username, password, host, port, dbName string) (persistence.MetadataManager, error) {
 	var db, err = sqlx.Connect("mysql",
-		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
+		fmt.Sprintf(Dsn, username, password, host, port, dbName))
 	if err != nil {
 		return nil, err
 	}

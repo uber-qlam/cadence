@@ -21,20 +21,21 @@
 package sql
 
 import (
+	"database/sql"
 	"fmt"
+	"time"
 
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common/persistence"
 
 	"github.com/jmoiron/sqlx"
-	"time"
 	"github.com/uber/cadence/common"
-	"database/sql"
 )
 
 type (
 	sqlMatchingManager struct {
 		db *sqlx.DB
+		shardID      int
 	}
 
 	FlatCreateWorkflowExecutionRequest struct {
@@ -221,6 +222,7 @@ WHERE
 task_id >= :min_read_level AND
 task_id <= :max_read_level
 `
+
 )
 
 func (m *sqlMatchingManager) Close() {
@@ -236,6 +238,24 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 	check for continueasnew, update the curret exec or create one for this new workflow
 	create a workflow with/without cross dc
 	 */
+
+	 if resp, err := m.GetWorkflowExecution(&persistence.GetWorkflowExecutionRequest{request.DomainID,
+	 request.Execution}); err == nil {
+	 	// Workflow already exists.
+	 	startVersion := common.EmptyVersion
+	 	if resp.State.ReplicationState != nil {
+	 		startVersion = resp.State.ReplicationState.StartVersion
+		}
+
+	 	return nil, &persistence.WorkflowExecutionAlreadyStartedError{
+	 		Msg: fmt.Sprintf("Workflow execution already running. WorkflowId: %v, RunId: %v", resp.State.ExecutionInfo.WorkflowID, resp.State.ExecutionInfo.RunID),
+	 		StartRequestID: resp.State.ExecutionInfo.CreateRequestID,
+	 		RunID: resp.State.ExecutionInfo.RunID,
+	 		State: resp.State.ExecutionInfo.State,
+	 		CloseStatus: resp.State.ExecutionInfo.CloseStatus,
+	 		StartVersion: startVersion,
+		}
+	 }
 
 	tx, err := m.db.Beginx()
 	if err != nil {
@@ -254,7 +274,7 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 		WorkflowTypeName: request.WorkflowTypeName,
 		WorkflowTimeoutSeconds: int64(request.WorkflowTimeout),
 		DecisionTaskTimeoutMinutes: int64(request.DecisionTimeoutValue),
-		State: persistence.WorkflowStateCreated,
+		State: persistence.WorkflowStateRunning,
 		CloseStatus: persistence.WorkflowCloseStatusNone,
 		LastFirstEventId: common.FirstEventID,
 		NextEventId: request.NextEventID,
@@ -278,6 +298,14 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution failed. Failed to insert into executions table. Error: %v", err),
 		}
+	}
+
+	if err := lockShard(tx, m.shardID); err != nil {
+		return nil, err
+	}
+
+	if err := updateShardLease(tx, m.shardID, request.RangeID); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -321,23 +349,11 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		}
 	}
 
-	falseIfNotZero := func (x int64) bool {
-		if x == 0 {
-			return false
-		}
-		return true
-	}
-
 	var state persistence.WorkflowMutableState
 	state.ExecutionInfo = &persistence.WorkflowExecutionInfo{
 		DomainID: result.DomainID,
 		WorkflowID: result.WorkflowID,
 		RunID: result.RunID,
-		ParentDomainID: *result.ParentDomainID,
-		ParentWorkflowID: *result.ParentWorkflowID,
-		ParentRunID: *result.ParentRunID,
-		InitiatedID: *result.InitiatedID,
-		CompletionEvent: *result.CompletionEvent,
 		TaskList: result.TaskList,
 		WorkflowTypeName: result.WorkflowTypeName,
 		WorkflowTimeout: int32(result.WorkflowTimeoutSeconds),
@@ -358,14 +374,26 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		DecisionTimeout              : int32(result.DecisionTimeout),
 		DecisionAttempt              : result.DecisionAttempt,
 		DecisionTimestamp            : result.DecisionTimestamp,
-		CancelRequested              : falseIfNotZero(*result.CancelRequested),
-		CancelRequestID              : *result.CancelRequestID,
 		StickyTaskList               : result.StickyTaskList,
 		StickyScheduleToStartTimeout : int32(result.StickyScheduleToStartTimeout),
 		ClientLibraryVersion         : result.ClientLibraryVersion,
 		ClientFeatureVersion         : result.ClientFeatureVersion,
 		ClientImpl                   : result.ClientImpl,
 	}
+
+	if result.ParentDomainID != nil {
+		state.ExecutionInfo.ParentDomainID = *result.ParentDomainID
+	state.ExecutionInfo.ParentWorkflowID = *result.ParentWorkflowID
+		state.ExecutionInfo.ParentRunID = *result.ParentRunID
+		state.ExecutionInfo.InitiatedID = *result.InitiatedID
+		state.ExecutionInfo.CompletionEvent=  *result.CompletionEvent
+	}
+
+	if result.CancelRequested != nil && (*result.CancelRequested != 0){
+		state.ExecutionInfo.CancelRequested = true
+		state.ExecutionInfo.CancelRequestID = *result.CancelRequestID
+	}
+
 
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
 }
@@ -440,7 +468,7 @@ func (*sqlMatchingManager) CompleteTimerTask(request *persistence.CompleteTimerT
 
 func NewSqlMatchingPersistence(username, password, host, port, dbName string) (persistence.ExecutionManager, error) {
 	var db, err = sqlx.Connect("mysql",
-		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
+		fmt.Sprintf(Dsn, username, password, host, port, dbName))
 	if err != nil {
 		return nil, err
 	}

@@ -52,3 +52,7 @@ func gobDeserialize(a []byte, x interface{}) error {
 	}
 	return nil
 }
+
+const (
+	Dsn = "%s:%s@tcp(%s:%s)/%s?multiStatements=true&tx_isolation=%%27READ-COMMITTED%%27&parseTime=true"
+)

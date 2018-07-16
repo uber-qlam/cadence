@@ -21,20 +21,103 @@
 package sql
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/uber/cadence/common/persistence"
-	"fmt"
+	workflow "github.com/uber/cadence/.gen/go/shared"
+	"database/sql"
 )
 
 type (
 	sqlShardManager struct {
 		db *sqlx.DB
 	}
+
+	shardsRow struct {
+		ShardID                   int64 `db:"shard_id"`
+		Owner                     string `db:"owner"`
+		RangeID                   int64 `db:"range_id"`
+		StolenSinceRenew          int64 `db:"stolen_since_renew"`
+		UpdatedAt                 time.Time `db:"updated_at"`
+		ReplicationAckLevel       int64 `db:"replication_ack_level"`
+		TransferAckLevel          int64     `db:"transfer_ack_level"`
+		TimerAckLevel             time.Time  `db:"timer_ack_level"`
+		ClusterTransferAckLevel   []byte `db:"cluster_transfer_ack_level"`
+		ClusterTimerAckLevel      []byte `db:"cluster_timer_ack_level"`
+		DomainNotificationVersion int64 `db:"domain_notification_version"`
+	}
+)
+
+const (
+	createShardSQLQuery = `INSERT INTO shards 
+(shard_id, 
+owner, 
+range_id,
+stolen_since_renew,
+updated_at,
+replication_ack_level,
+transfer_ack_level,
+timer_ack_level,
+cluster_transfer_ack_level,
+cluster_timer_ack_level,
+domain_notification_version)
+VALUES
+(:shard_id, 
+:owner, 
+:range_id,
+:stolen_since_renew,
+:updated_at,
+:replication_ack_level,
+:transfer_ack_level,
+:timer_ack_level,
+:cluster_transfer_ack_level,
+:cluster_timer_ack_level,
+:domain_notification_version)`
+
+	getShardSQLQuery = `SELECT
+shard_id,
+owner,
+range_id,
+stolen_since_renew,
+updated_at,
+replication_ack_level,
+transfer_ack_level,
+timer_ack_level,
+cluster_transfer_ack_level,
+cluster_timer_ack_level,
+domain_notification_version
+FROM shards WHERE
+shard_id = :shard_id
+`
+
+	updateShardSQLQuery = `UPDATE
+shards 
+SET
+shard_id = :shard_id,
+owner = :owner,
+range_id = :range_id,
+stolen_since_renew = :stolen_since_renew,
+updated_at = :updated_at,
+replication_ack_level = :replication_ack_level,
+transfer_ack_level = :transfer_ack_level,
+timer_ack_level = :timer_ack_level,
+cluster_transfer_ack_level = :cluster_transfer_ack_level,
+cluster_timer_ack_level = :cluster_timer_ack_level,
+domain_notification_version = :domain_notification_version
+WHERE
+shard_id = :shard_id AND
+range_id = :old_range_id
+`
+
+	lockShardSQLQuery  = `SELECT 1 FROM shards WHERE shard_id = ? FOR UPDATE`
+	updateLeaseSQLQuery = `SELECT 1 FROM shards WHERE shard_id = ? AND range_id = ?`
 )
 
 func NewShardPersistence(username, password, host, port, dbName string) (persistence.ShardManager, error) {
 	var db, err = sqlx.Connect("mysql",
-		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
+		fmt.Sprintf(Dsn, username, password, host, port, dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -51,15 +134,221 @@ func (m *sqlShardManager) Close() {
 }
 
 func (m *sqlShardManager) CreateShard(request *persistence.CreateShardRequest) error {
+	_, err := m.GetShard(&persistence.GetShardRequest{request.ShardInfo.ShardID})
+	if err == nil {
+		// The shard already exists.
+		return &persistence.ShardAlreadyExistError{
+			Msg: fmt.Sprintf("CreateShard operation failed. Shard already exists. ShardId: %v, RangeId: %v", request.ShardInfo.ShardID, request.ShardInfo.RangeID),
+		}
+	} else {
+		switch err.(type) {
+		case *workflow.EntityNotExistsError:
+			row, err := shardInfoToShardsRow(*request.ShardInfo)
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("CreateShard operation failed. Error: %v", err),
+				}
+			}
+
+			if _, err := m.db.NamedExec(createShardSQLQuery, row); err != nil {
+				return nil
+			}
+		default:
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("CreateShard operation failed. Failed to verify whether a shard of ID %v already existed. Error: %v", request.ShardInfo.ShardID, err),
+			}
+		}
+	}
+
 	return nil
 }
 
 func (m *sqlShardManager) GetShard(request *persistence.GetShardRequest) (*persistence.GetShardResponse, error) {
-	return &persistence.GetShardResponse{&persistence.ShardInfo{}}, nil
+	stmt, err := m.db.PrepareNamed(getShardSQLQuery)
+	if err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetShard operation failed. Failed to prepare statement. ShardId: %v. Error: %v", request.ShardID, ),
+		}
+	}
+
+	var row shardsRow
+	err = stmt.Get(&row, struct{ShardID int `db:"shard_id"`}{request.ShardID})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, &workflow.EntityNotExistsError{
+				Message: fmt.Sprintf("GetShard operation failed. Shard with ID %v not found. Error: %v", request.ShardID, err),
+			}
+		}
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetShard operation failed. Failed to get record. ShardId: %v. Error: %v", request.ShardID, err),
+		}
+	}
+
+	clusterTransferAckLevel := make(map[string]int64)
+	if err := gobDeserialize(row.ClusterTransferAckLevel, &clusterTransferAckLevel); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetShard operation failed. Failed to deserialize ShardInfo.ClusterTransferAckLevel. ShardId: %v. Error: %v", request.ShardID, err),
+		}
+	}
+
+	clusterTimerAckLevel := make(map[string]time.Time)
+	if err := gobDeserialize(row.ClusterTimerAckLevel, &clusterTimerAckLevel); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetShard operation failed. Failed to deserialize ShardInfo.ClusterTimerAckLevel. ShardId: %v. Error: %v", request.ShardID, err),
+		}
+	}
+
+	return &persistence.GetShardResponse{ShardInfo: &persistence.ShardInfo{
+		ShardID: int(row.ShardID),
+		Owner: row.Owner,
+		RangeID: row.RangeID,
+		StolenSinceRenew: int(row.StolenSinceRenew),
+		UpdatedAt: row.UpdatedAt,
+		ReplicationAckLevel: row.ReplicationAckLevel,
+		TransferAckLevel: row.TransferAckLevel,
+		TimerAckLevel: row.TimerAckLevel,
+		ClusterTransferAckLevel: clusterTransferAckLevel,
+		ClusterTimerAckLevel: clusterTimerAckLevel,
+		DomainNotificationVersion: row.DomainNotificationVersion,
+	}}, nil
 }
 
 func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) error {
-	panic("implement me")
+	_, err := m.GetShard(&persistence.GetShardRequest{request.ShardInfo.ShardID})
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateShard operation failed. Failed to check if shard exists. Error: %v", err),
+		}
+	}
+
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateShard operation failed. Failed to begin transaction. Error: %v", err),
+		}
+	}
+	defer tx.Rollback()
+
+	if err := lockShard(tx, request.ShardInfo.ShardID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateShard operation failed. Failed to lock shard. Error: %v", err),
+		}
+	}
+
+	row, err := shardInfoToShardsRow(*request.ShardInfo)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateShard operation failed. Error: %v", err),
+		}
+	}
+
+	result, err := tx.NamedExec(updateShardSQLQuery, struct{
+		shardsRow
+		OldRangeID int64 `db:"old_range_id"`
+	}{*row, request.PreviousRangeID})
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdatedShard operation failed. Failed to update shard with ID: %v. Error: %v", request.ShardInfo.ShardID, err),
+		}
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdatedShard operation failed. Failed to verify whether we successfully updated shard with ID: %v. Error: %v", request.ShardInfo.ShardID, err),
+		}
+	}
+
+	switch {
+	case rowsAffected == 0:
+		return &persistence.ShardOwnershipLostError{
+			ShardID: request.ShardInfo.ShardID,
+			Msg: fmt.Sprintf("UpdateShard operation failed. Previous range ID: ", request.PreviousRangeID),
+		}
+	case rowsAffected > 1:
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdatedShard operation failed. Tried to update %v shards.", rowsAffected),
+		}
+	}
+
+	// Exactly 1 row was updated: the correct behaviour.
+	if err := tx.Commit(); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdatedShard operation failed. Failed to commit transaction. Error: %v", err),
+		}
+	}
+
+	return nil
 }
 
 
+func lockShard(tx *sqlx.Tx, shardID int) error {
+	var dummy struct{Foo int `db:"1"`}
+
+	err := tx.Get(&dummy, lockShardSQLQuery, shardID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to lock shard with ID %v that does not exist.", shardID, err),
+			}
+		}
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to lock shard with ID: %v. Error: %v", shardID, err),
+		}
+	}
+
+	// Successfully "scanned" the dummy row, which means there was a result.
+	return nil
+}
+
+func updateShardLease(tx *sqlx.Tx, shardID int, rangeID int64) error {
+	var dummy struct{Foo int `db:"1"`}
+
+	err := tx.Get(&dummy, updateLeaseSQLQuery, shardID, rangeID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &persistence.ShardOwnershipLostError{
+				ShardID: shardID,
+				Msg: fmt.Sprintf("Failed to update shard. Previous range ID: %v", rangeID),
+			}
+		}
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to update lease with shard with ID: %v. Error: %v", shardID, err),
+		}
+	}
+
+	// Successfully "scanned" the dummy row, which means there was one row for a result.
+	return nil
+}
+
+func shardInfoToShardsRow(s persistence.ShardInfo) (*shardsRow, error) {
+	clusterTransferAckLevel, err := gobSerialize(s.ClusterTransferAckLevel);
+	if err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateShard operation failed. Failed to serialize ShardInfo.ClusterTransferAckLevel. Error: %v", err),
+		}
+	}
+
+	clusterTimerAckLevel, err := gobSerialize(s.ClusterTimerAckLevel);
+	if err !=  nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateShard operation failed. Failed to serialize ShardInfo.ClusterTimerAckLevel. Error: %v", err),
+		}
+	}
+
+	return &shardsRow{
+		ShardID: int64(s.ShardID),
+		Owner: s.Owner,
+		RangeID: s.RangeID,
+		StolenSinceRenew: int64(s.StolenSinceRenew),
+		UpdatedAt: s.UpdatedAt,
+		ReplicationAckLevel: s.ReplicationAckLevel,
+		TransferAckLevel: s.TransferAckLevel,
+		TimerAckLevel: s.TimerAckLevel,
+		ClusterTransferAckLevel: clusterTransferAckLevel,
+		ClusterTimerAckLevel: clusterTimerAckLevel,
+		DomainNotificationVersion: s.DomainNotificationVersion,
+	}, nil
+}

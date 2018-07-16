@@ -34,7 +34,7 @@ type(
 
 func NewTaskPersistence(username, password, host, port, dbName string) (persistence.TaskManager, error) {
 	var db, err = sqlx.Connect("mysql",
-		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName))
+		fmt.Sprintf(Dsn, username, password, host, port, dbName))
 	if err != nil {
 		return nil, err
 	}

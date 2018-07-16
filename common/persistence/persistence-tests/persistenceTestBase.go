@@ -41,6 +41,7 @@ import (
 	"github.com/uber/cadence/common/persistence"
 	"github.com/uber/cadence/common/persistence/cassandra"
 	"github.com/uber/cadence/common/persistence/sql"
+	"fmt"
 )
 
 const (
@@ -249,22 +250,24 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 		s.ClusterMetadata = cluster.GetTestClusterMetadata(false, false)
 
 		db, err := sqlx.Connect("mysql",
-			"uber:uber@tcp(localhost:3306)/catalyst_test?multiStatements=true&tx_isolation=%27READ-COMMITTED%27")
+			fmt.Sprintf(sql.Dsn, "uber", "uber", "localhost", "3306", "catalyst_test"))
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		file, err := ioutil.ReadFile("../sql/domains.sql")
-		if err != nil {
-			log.Fatal(err)
-		}
-		db.MustExec(string(file))
 
-		file, err = ioutil.ReadFile("../sql/executions.sql")
-		if err != nil {
-			log.Fatal(err)
+		for _, filename := range []string{
+			"../sql/domains.sql",
+			"../sql/executions.sql",
+			"../sql/shards.sql",
+		}{
+			file, err := ioutil.ReadFile(filename)
+			if err != nil {
+				log.Fatal(err)
+			}
+			db.MustExec(string(file))
 		}
-		db.MustExec(string(file))
+
 
 		db.Close()
 	}
@@ -1115,6 +1118,8 @@ func (s *TestBase) TearDownWorkflowStore() {
 		for _, s := range []string{"domains",
 		"domain_metadata",
 		"executions",
+		"current_executions",
+		"shards",
 		"transfer_tasks"} {
 			db.MustExec("drop table if exists " + s)
 		}

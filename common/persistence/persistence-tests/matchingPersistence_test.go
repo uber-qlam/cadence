@@ -2456,7 +2456,6 @@ func (s *matchingPersistenceSuite) TestCreateGetUpdateGetShard() {
 		ShardInfo: shardInfo,
 	}
 	s.Nil(s.ShardMgr.CreateShard(createRequest))
-
 	resp, err := s.ShardMgr.GetShard(&persistence.GetShardRequest{ShardID: shardID})
 	s.Nil(err)
 	s.True(timeComparator(shardInfo.UpdatedAt, resp.ShardInfo.UpdatedAt, timePrecision))
