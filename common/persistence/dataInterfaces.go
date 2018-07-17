@@ -211,15 +211,15 @@ type (
 		DomainID                string `db:"domain_id"`
 		WorkflowID              string `db:"workflow_id"`
 		RunID                   string `db:"run_id"`
-		TaskID                  int64 `db:"task_id"`
+		TaskID                  int64  `db:"task_id"`
 		TargetDomainID          string `db:"target_domain_id"`
 		TargetWorkflowID        string `db:"target_workflow_id"`
 		TargetRunID             string `db:"target_run_id"`
-		TargetChildWorkflowOnly bool `db:"target_child_workflow_only"`
+		TargetChildWorkflowOnly bool   `db:"target_child_workflow_only"`
 		TaskList                string `db:"task_list"`
-		TaskType                int `db:"type"`
-		ScheduleID              int64 `db:"schedule_id"`
-		Version                 int64 `db:"version_id"`
+		TaskType                int    `db:"type"`
+		ScheduleID              int64  `db:"schedule_id"`
+		Version                 int64  `db:"version_id"`
 	}
 
 	// ReplicationTaskInfo describes the replication task created for replication of history events

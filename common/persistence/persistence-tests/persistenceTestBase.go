@@ -33,6 +33,7 @@ import (
 	"github.com/uber/cadence/common/cluster"
 	"github.com/uber/cadence/common/logging"
 
+	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/jmoiron/sqlx"
 	"github.com/pborman/uuid"
@@ -41,7 +42,6 @@ import (
 	"github.com/uber/cadence/common/persistence"
 	"github.com/uber/cadence/common/persistence/cassandra"
 	"github.com/uber/cadence/common/persistence/sql"
-	"fmt"
 )
 
 const (
@@ -120,8 +120,6 @@ func (g *testTransferTaskIDGenerator) GetNextTransferTaskID() (int64, error) {
 
 // SetupWorkflowStoreWithOptions to setup workflow test base
 func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metadata cluster.Metadata) {
-	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
-
 	if !s.UseMysql {
 		log := bark.NewLoggerFromLogrus(log.New())
 
@@ -205,12 +203,6 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			ClusterTransferAckLevel: map[string]int64{currentClusterName: 0},
 		}
 
-		err1 := s.ShardMgr.CreateShard(&persistence.CreateShardRequest{
-			ShardInfo: s.ShardInfo,
-		})
-		if err1 != nil {
-			log.Fatal(err1)
-		}
 	} else {
 		var err error
 
@@ -234,8 +226,7 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		s.ShardInfo = &persistence.ShardInfo{
-		}
+		s.ShardInfo = &persistence.ShardInfo{}
 
 		s.TaskMgr, err = sql.NewTaskPersistence("uber", "uber", "localhost", "3306", "catalyst_test")
 		if err != nil {
@@ -255,12 +246,11 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-
 		for _, filename := range []string{
 			"../sql/domains.sql",
 			"../sql/executions.sql",
 			"../sql/shards.sql",
-		}{
+		} {
 			file, err := ioutil.ReadFile(filename)
 			if err != nil {
 				log.Fatal(err)
@@ -268,8 +258,15 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			db.MustExec(string(file))
 		}
 
-
 		db.Close()
+	}
+	s.TaskIDGenerator = &testTransferTaskIDGenerator{}
+
+	err1 := s.ShardMgr.CreateShard(&persistence.CreateShardRequest{
+		ShardInfo: s.ShardInfo,
+	})
+	if err1 != nil {
+		log.Fatal(err1)
 	}
 }
 
@@ -1116,11 +1113,11 @@ func (s *TestBase) TearDownWorkflowStore() {
 		}
 
 		for _, s := range []string{"domains",
-		"domain_metadata",
-		"executions",
-		"current_executions",
-		"shards",
-		"transfer_tasks"} {
+			"domain_metadata",
+			"executions",
+			"current_executions",
+			"shards",
+			"transfer_tasks"} {
 			db.MustExec("drop table if exists " + s)
 		}
 		db.Close()

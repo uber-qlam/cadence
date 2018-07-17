@@ -34,66 +34,66 @@ import (
 
 type (
 	sqlMatchingManager struct {
-		db *sqlx.DB
-		shardID      int
+		db      *sqlx.DB
+		shardID int
 	}
 
 	FlatCreateWorkflowExecutionRequest struct {
-		DomainID string `db:"domain_id"`
-		WorkflowID string `db:"workflow_id"`
-		RunID string `db:"run_id"`
-		ParentDomainID *string `db:"parent_domain_id"`
-		ParentWorkflowID *string`db:"parent_workflow_id"`
-		ParentRunID *string `db:"parent_run_id"`
-		InitiatedID *int64 `db:"initiated_id"`
-		TaskList string `db:"task_list"`
-		WorkflowTypeName string `db:"workflow_type_name"`
-		WorkflowTimeoutSeconds int64 `db:"workflow_timeout_seconds"`
-		DecisionTimeoutValue int64 `db:"decision_timeout_value"`
-		ExecutionContext []byte `db:"execution_context"`
-		NextEventID int64 `db:"next_event_id"`
-		LastProcessedEvent int64 `db:"last_processed_event"`
+		DomainID               string  `db:"domain_id"`
+		WorkflowID             string  `db:"workflow_id"`
+		RunID                  string  `db:"run_id"`
+		ParentDomainID         *string `db:"parent_domain_id"`
+		ParentWorkflowID       *string `db:"parent_workflow_id"`
+		ParentRunID            *string `db:"parent_run_id"`
+		InitiatedID            *int64  `db:"initiated_id"`
+		TaskList               string  `db:"task_list"`
+		WorkflowTypeName       string  `db:"workflow_type_name"`
+		WorkflowTimeoutSeconds int64   `db:"workflow_timeout_seconds"`
+		DecisionTimeoutValue   int64   `db:"decision_timeout_value"`
+		ExecutionContext       []byte  `db:"execution_context"`
+		NextEventID            int64   `db:"next_event_id"`
+		LastProcessedEvent     int64   `db:"last_processed_event"`
 		// maybe i don't need this.
 	}
 
 	executionRow struct {
-		DomainID string `db:"domain_id"`
-		WorkflowID string `db:"workflow_id"`
-		RunID string `db:"run_id"`
-		ParentDomainID *string `db:"parent_domain_id"`
-		ParentWorkflowID *string`db:"parent_workflow_id"`
-		ParentRunID *string `db:"parent_run_id"`
-		InitiatedID *int64 `db:"initiated_id"`
-		CompletionEvent *[]byte `db:"completion_event"`
-		TaskList string `db:"task_list"`
-		WorkflowTypeName string `db:"workflow_type_name"`
-		WorkflowTimeoutSeconds int64 `db:"workflow_timeout_seconds"`
-		DecisionTaskTimeoutMinutes int64 `db:"decision_task_timeout_minutes"`
-		ExecutionContext []byte `db:"execution_context"`
-		State int64 `db:"state"`
-		CloseStatus int64 `db:"close_status"`
-		StartVersion int64 `db:"start_version"`
-		LastFirstEventId int64 `db:"last_first_event_id"`
-		NextEventId int64 `db:"next_event_id"`
-		LastProcessedEvent int64 `db:"last_processed_event"`
-		StartTime time.Time `db:"start_time"`
-		LastUpdatedTime time.Time `db:"last_updated_time"`
-		CreateRequestId string `db:"create_request_id"`
-		DecisionVersion int64 `db:"decision_version"`
-		DecisionScheduleID int64 `db:"decision_schedule_id"`
-		DecisionStartedID int64 `db:"decision_started_id"`
-		DecisionRequestID string `db:"decision_request_id"`
-		DecisionTimeout int64 `db:"decision_timeout"`
-		DecisionAttempt int64 `db:"decision_attempt"`
-		DecisionTimestamp int64 `db:"decision_timestamp"`
-		CancelRequested *int64 `db:"cancel_requested"`
-		CancelRequestID *string `db:"cancel_request_id"`
-		StickyTaskList string `db:"sticky_task_list"`
-		StickyScheduleToStartTimeout int64 `db:"sticky_schedule_to_start_timeout"`
-		ClientLibraryVersion string `db:"client_library_version"`
-		ClientFeatureVersion string `db:"client_feature_version"`
-		ClientImpl string `db:"client_impl"`
-		ShardID string `db:"shard_id"`
+		DomainID                     string    `db:"domain_id"`
+		WorkflowID                   string    `db:"workflow_id"`
+		RunID                        string    `db:"run_id"`
+		ParentDomainID               *string   `db:"parent_domain_id"`
+		ParentWorkflowID             *string   `db:"parent_workflow_id"`
+		ParentRunID                  *string   `db:"parent_run_id"`
+		InitiatedID                  *int64    `db:"initiated_id"`
+		CompletionEvent              *[]byte   `db:"completion_event"`
+		TaskList                     string    `db:"task_list"`
+		WorkflowTypeName             string    `db:"workflow_type_name"`
+		WorkflowTimeoutSeconds       int64     `db:"workflow_timeout_seconds"`
+		DecisionTaskTimeoutMinutes   int64     `db:"decision_task_timeout_minutes"`
+		ExecutionContext             []byte    `db:"execution_context"`
+		State                        int64     `db:"state"`
+		CloseStatus                  int64     `db:"close_status"`
+		StartVersion                 *int64    `db:"start_version"`
+		LastFirstEventID             int64     `db:"last_first_event_id"`
+		NextEventID                  int64     `db:"next_event_id"`
+		LastProcessedEvent           int64     `db:"last_processed_event"`
+		StartTime                    time.Time `db:"start_time"`
+		LastUpdatedTime              time.Time `db:"last_updated_time"`
+		CreateRequestID              string    `db:"create_request_id"`
+		DecisionVersion              int64     `db:"decision_version"`
+		DecisionScheduleID           int64     `db:"decision_schedule_id"`
+		DecisionStartedID            int64     `db:"decision_started_id"`
+		DecisionRequestID            string    `db:"decision_request_id"`
+		DecisionTimeout              int64     `db:"decision_timeout"`
+		DecisionAttempt              int64     `db:"decision_attempt"`
+		DecisionTimestamp            int64     `db:"decision_timestamp"`
+		CancelRequested              *int64    `db:"cancel_requested"`
+		CancelRequestID              *string   `db:"cancel_request_id"`
+		StickyTaskList               string    `db:"sticky_task_list"`
+		StickyScheduleToStartTimeout int64     `db:"sticky_schedule_to_start_timeout"`
+		ClientLibraryVersion         string    `db:"client_library_version"`
+		ClientFeatureVersion         string    `db:"client_feature_version"`
+		ClientImpl                   string    `db:"client_impl"`
+		ShardID                      string    `db:"shard_id"`
 	}
 )
 
@@ -126,7 +126,6 @@ sticky_schedule_to_start_timeout,
 client_library_version,
 client_feature_version,
 client_impl`
-
 
 	executionsNonNullableColumnsTags = `:shard_id,
 :domain_id,
@@ -163,7 +162,7 @@ execution_context`
 	executionsBlobColumnsTags = `:completion_event,
 :execution_context`
 
-// Excluding completion_event
+	// Excluding completion_event
 	executionsNonblobParentColumns = `parent_domain_id,
 parent_workflow_id,
 parent_run_id,
@@ -180,9 +179,12 @@ cancel_request_id`
 	executionsCancelColumnsTags = `:cancel_requested,
 :cancel_request_id`
 
+	executionsReplicationStateColumns     = `start_version`
+	executionsReplicationStateColumnsTags = `:start_version`
+
 	createExecutionWithNoParentSQLQuery = `INSERT INTO executions 
 (` + executionsNonNullableColumns +
-`,
+		`,
 execution_context,
 cancel_requested,
 cancel_request_id)
@@ -197,8 +199,9 @@ VALUES
 		executionsNonNullableColumns + "," +
 		executionsBlobColumns + "," +
 		executionsNonblobParentColumns + "," +
-		executionsCancelColumns +
-	 ` FROM executions WHERE
+		executionsCancelColumns + "," +
+		executionsReplicationStateColumns +
+		` FROM executions WHERE
 shard_id = :shard_id AND
 domain_id = :domain_id AND
 workflow_id = :workflow_id AND
@@ -222,7 +225,6 @@ WHERE
 task_id >= :min_read_level AND
 task_id <= :max_read_level
 `
-
 )
 
 func (m *sqlMatchingManager) Close() {
@@ -233,29 +235,11 @@ func (m *sqlMatchingManager) Close() {
 
 func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.CreateWorkflowExecutionRequest) (*persistence.CreateWorkflowExecutionResponse, error) {
 	/*
-	make a transaction
-	check for a parent
-	check for continueasnew, update the curret exec or create one for this new workflow
-	create a workflow with/without cross dc
-	 */
-
-	 if resp, err := m.GetWorkflowExecution(&persistence.GetWorkflowExecutionRequest{request.DomainID,
-	 request.Execution}); err == nil {
-	 	// Workflow already exists.
-	 	startVersion := common.EmptyVersion
-	 	if resp.State.ReplicationState != nil {
-	 		startVersion = resp.State.ReplicationState.StartVersion
-		}
-
-	 	return nil, &persistence.WorkflowExecutionAlreadyStartedError{
-	 		Msg: fmt.Sprintf("Workflow execution already running. WorkflowId: %v, RunId: %v", resp.State.ExecutionInfo.WorkflowID, resp.State.ExecutionInfo.RunID),
-	 		StartRequestID: resp.State.ExecutionInfo.CreateRequestID,
-	 		RunID: resp.State.ExecutionInfo.RunID,
-	 		State: resp.State.ExecutionInfo.State,
-	 		CloseStatus: resp.State.ExecutionInfo.CloseStatus,
-	 		StartVersion: startVersion,
-		}
-	 }
+		make a transaction
+		check for a parent
+		check for continueasnew, update the curret exec or create one for this new workflow
+		create a workflow with/without cross dc
+	*/
 
 	tx, err := m.db.Beginx()
 	if err != nil {
@@ -265,58 +249,84 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 	}
 	defer tx.Rollback()
 
-	nowTimestamp := time.Now()
-	_, err = m.db.NamedExec(createExecutionWithNoParentSQLQuery, executionRow{
-		DomainID: request.DomainID,
-		WorkflowID: *request.Execution.WorkflowId,
-		RunID: *request.Execution.RunId,
-		TaskList: request.TaskList,
-		WorkflowTypeName: request.WorkflowTypeName,
-		WorkflowTimeoutSeconds: int64(request.WorkflowTimeout),
-		DecisionTaskTimeoutMinutes: int64(request.DecisionTimeoutValue),
-		State: persistence.WorkflowStateRunning,
-		CloseStatus: persistence.WorkflowCloseStatusNone,
-		LastFirstEventId: common.FirstEventID,
-		NextEventId: request.NextEventID,
-		LastProcessedEvent: request.LastProcessedEvent,
-		StartTime: nowTimestamp,
-		LastUpdatedTime: nowTimestamp,
-		CreateRequestId: request.RequestID,
-		DecisionVersion: int64(request.DecisionVersion),
-		DecisionScheduleID: int64(request.DecisionScheduleID),
-		DecisionStartedID: int64(request.DecisionStartedID),
-		DecisionTimeout: int64(request.DecisionStartToCloseTimeout),
-		DecisionAttempt: 0,
-		DecisionTimestamp: 0,
-		StickyTaskList: "",
-		StickyScheduleToStartTimeout: 0,
-		ClientLibraryVersion: "",
-		ClientFeatureVersion: "",
-		ClientImpl: "",
-	})
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateWorkflowExecution failed. Failed to insert into executions table. Error: %v", err),
+	if row, err := getExecutionsRowIfExists(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId, *request.Execution.RunId); err == nil {
+		// Workflow already exists.
+		startVersion := common.EmptyVersion
+		if row.StartVersion != nil {
+			startVersion = *row.StartVersion
+		}
+
+		return nil, &persistence.WorkflowExecutionAlreadyStartedError{
+			Msg:            fmt.Sprintf("Workflow execution already running. WorkflowId: %v", row.WorkflowID),
+			StartRequestID: row.CreateRequestID,
+			RunID:          row.RunID,
+			State:          int(row.State),
+			CloseStatus:    int(row.CloseStatus),
+			StartVersion:   startVersion,
 		}
 	}
 
+	nowTimestamp := time.Now()
+	_, err = m.db.NamedExec(createExecutionWithNoParentSQLQuery, executionRow{
+		DomainID:                   request.DomainID,
+		WorkflowID:                 *request.Execution.WorkflowId,
+		RunID:                      *request.Execution.RunId,
+		TaskList:                   request.TaskList,
+		WorkflowTypeName:           request.WorkflowTypeName,
+		WorkflowTimeoutSeconds:     int64(request.WorkflowTimeout),
+		DecisionTaskTimeoutMinutes: int64(request.DecisionTimeoutValue),
+		State:                        persistence.WorkflowStateCreated,
+		CloseStatus:                  persistence.WorkflowCloseStatusNone,
+		LastFirstEventID:             common.FirstEventID,
+		NextEventID:                  request.NextEventID,
+		LastProcessedEvent:           request.LastProcessedEvent,
+		StartTime:                    nowTimestamp,
+		LastUpdatedTime:              nowTimestamp,
+		CreateRequestID:              request.RequestID,
+		DecisionVersion:              int64(request.DecisionVersion),
+		DecisionScheduleID:           int64(request.DecisionScheduleID),
+		DecisionStartedID:            int64(request.DecisionStartedID),
+		DecisionTimeout:              int64(request.DecisionStartToCloseTimeout),
+		DecisionAttempt:              0,
+		DecisionTimestamp:            0,
+		StickyTaskList:               "",
+		StickyScheduleToStartTimeout: 0,
+		ClientLibraryVersion:         "",
+		ClientFeatureVersion:         "",
+		ClientImpl:                   "",
+	})
+	if err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into executions table. Error: %v", err),
+		}
+	}
+
+
 	if err := lockShard(tx, m.shardID); err != nil {
-		return nil, err
+
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Error: %v", err),
+		}
 	}
 
 	if err := updateShardLease(tx, m.shardID, request.RangeID); err != nil {
-		return nil, err
+		switch err.(type) {
+		case *persistence.ShardOwnershipLostError:
+			return nil, err
+		default:
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Error: %v", err),
+			}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateWorkflowExecution failed. Failed to commit transaction. Error: %v", err),
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to commit transaction. Error: %v", err),
 		}
 	}
 
-	return &persistence.CreateWorkflowExecutionResponse{
-
-	}, nil
+	return &persistence.CreateWorkflowExecutionResponse{}, nil
 }
 
 func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkflowExecutionRequest) (*persistence.GetWorkflowExecutionResponse, error) {
@@ -328,15 +338,15 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 	}
 
 	var result executionRow
-	if err := stmt.Get(&result, struct{
-		ShardId string `db:"shard_id"`
-		DomainId string `db:"domain_id"`
+	if err := stmt.Get(&result, struct {
+		ShardId    int    `db:"shard_id"`
+		DomainId   string `db:"domain_id"`
 		WorkflowId string `db:"workflow_id"`
-		RunId string `db:"run_id"`
-	}{"",
-	request.DomainID,
-	*request.Execution.WorkflowId,
-	*request.Execution.RunId}); err != nil {
+		RunId      string `db:"run_id"`
+	}{m.shardID,
+		request.DomainID,
+		*request.Execution.WorkflowId,
+		*request.Execution.RunId}); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, &workflow.EntityNotExistsError{
 				Message: fmt.Sprintf("Workflow execution not found.  WorkflowId: %v, RunId: %v",
@@ -351,49 +361,48 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 
 	var state persistence.WorkflowMutableState
 	state.ExecutionInfo = &persistence.WorkflowExecutionInfo{
-		DomainID: result.DomainID,
-		WorkflowID: result.WorkflowID,
-		RunID: result.RunID,
-		TaskList: result.TaskList,
-		WorkflowTypeName: result.WorkflowTypeName,
-		WorkflowTimeout: int32(result.WorkflowTimeoutSeconds),
-		DecisionTimeoutValue: int32(result.DecisionTaskTimeoutMinutes),
-		ExecutionContext: result.ExecutionContext,
-		State                       : int(result.State),
-		CloseStatus                  : int(result.CloseStatus),
-		LastFirstEventID             : result.LastFirstEventId,
-		NextEventID                  : result.NextEventId,
-		LastProcessedEvent          : result.LastProcessedEvent,
-		StartTimestamp               : result.StartTime,
-		LastUpdatedTimestamp       : result.LastUpdatedTime,
-		CreateRequestID              :result.CreateRequestId,
-		DecisionVersion              :result.DecisionVersion,
-		DecisionScheduleID           : result.DecisionScheduleID,
-		DecisionStartedID            : result.DecisionStartedID,
-		DecisionRequestID            : result.DecisionRequestID,
-		DecisionTimeout              : int32(result.DecisionTimeout),
-		DecisionAttempt              : result.DecisionAttempt,
-		DecisionTimestamp            : result.DecisionTimestamp,
-		StickyTaskList               : result.StickyTaskList,
-		StickyScheduleToStartTimeout : int32(result.StickyScheduleToStartTimeout),
-		ClientLibraryVersion         : result.ClientLibraryVersion,
-		ClientFeatureVersion         : result.ClientFeatureVersion,
-		ClientImpl                   : result.ClientImpl,
+		DomainID:                     result.DomainID,
+		WorkflowID:                   result.WorkflowID,
+		RunID:                        result.RunID,
+		TaskList:                     result.TaskList,
+		WorkflowTypeName:             result.WorkflowTypeName,
+		WorkflowTimeout:              int32(result.WorkflowTimeoutSeconds),
+		DecisionTimeoutValue:         int32(result.DecisionTaskTimeoutMinutes),
+		ExecutionContext:             result.ExecutionContext,
+		State:                        int(result.State),
+		CloseStatus:                  int(result.CloseStatus),
+		LastFirstEventID:             result.LastFirstEventID,
+		NextEventID:                  result.NextEventID,
+		LastProcessedEvent:           result.LastProcessedEvent,
+		StartTimestamp:               result.StartTime,
+		LastUpdatedTimestamp:         result.LastUpdatedTime,
+		CreateRequestID:              result.CreateRequestID,
+		DecisionVersion:              result.DecisionVersion,
+		DecisionScheduleID:           result.DecisionScheduleID,
+		DecisionStartedID:            result.DecisionStartedID,
+		DecisionRequestID:            result.DecisionRequestID,
+		DecisionTimeout:              int32(result.DecisionTimeout),
+		DecisionAttempt:              result.DecisionAttempt,
+		DecisionTimestamp:            result.DecisionTimestamp,
+		StickyTaskList:               result.StickyTaskList,
+		StickyScheduleToStartTimeout: int32(result.StickyScheduleToStartTimeout),
+		ClientLibraryVersion:         result.ClientLibraryVersion,
+		ClientFeatureVersion:         result.ClientFeatureVersion,
+		ClientImpl:                   result.ClientImpl,
 	}
 
 	if result.ParentDomainID != nil {
 		state.ExecutionInfo.ParentDomainID = *result.ParentDomainID
-	state.ExecutionInfo.ParentWorkflowID = *result.ParentWorkflowID
+		state.ExecutionInfo.ParentWorkflowID = *result.ParentWorkflowID
 		state.ExecutionInfo.ParentRunID = *result.ParentRunID
 		state.ExecutionInfo.InitiatedID = *result.InitiatedID
-		state.ExecutionInfo.CompletionEvent=  *result.CompletionEvent
+		state.ExecutionInfo.CompletionEvent = *result.CompletionEvent
 	}
 
-	if result.CancelRequested != nil && (*result.CancelRequested != 0){
+	if result.CancelRequested != nil && (*result.CancelRequested != 0) {
 		state.ExecutionInfo.CancelRequested = true
 		state.ExecutionInfo.CancelRequestID = *result.CancelRequestID
 	}
-
 
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
 }
@@ -476,4 +485,30 @@ func NewSqlMatchingPersistence(username, password, host, port, dbName string) (p
 	return &sqlMatchingManager{
 		db: db,
 	}, nil
+}
+
+func getExecutionsRowIfExists(tx *sqlx.Tx, shardID int, domainId string, workflowId string, runId string) (*executionRow, error) {
+	stmt, err := tx.PrepareNamed(getExecutionSQLQuery)
+	if err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to prepare named statement. Error: %v", err),
+		}
+	}
+
+	var result executionRow
+	if err := stmt.Get(&result, struct {
+		ShardId    int    `db:"shard_id"`
+		DomainId   string `db:"domain_id"`
+		WorkflowId string `db:"workflow_id"`
+		RunId      string `db:"run_id"`
+	}{shardID,
+		domainId,
+		workflowId,
+		runId}); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get executions row for (shard,domain,workflow,run) = (%v, %v, %v, %v). Error: %v", shardID, domainId, workflowId, runId, err),
+		}
+	}
+
+	return &result, nil
 }

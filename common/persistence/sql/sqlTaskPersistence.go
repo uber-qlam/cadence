@@ -21,12 +21,12 @@
 package sql
 
 import (
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/uber/cadence/common/persistence"
-	"fmt"
 )
 
-type(
+type (
 	sqlTaskManager struct {
 		db *sqlx.DB
 	}
@@ -69,6 +69,3 @@ func (m *sqlTaskManager) GetTasks(request *persistence.GetTasksRequest) (*persis
 func (m *sqlTaskManager) CompleteTask(request *persistence.CompleteTaskRequest) error {
 	panic("implement me")
 }
-
-
-

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS executions(
 	execution_context BLOB, -- nullable because test passes in a null blob.
 	state INT NOT NULL,
 	close_status INT NOT NULL,
-  start_version BIGINT NOT NULL,
+  start_version BIGINT,
   -- other replication_state members omitted due to lack of use
 	last_first_event_id BIGINT NOT NULL,
 	next_event_id BIGINT NOT NULL, -- very important! for conditional updates of all the dependent tables.
