@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS current_executions(
   shard_id INT NOT NULL,
   domain_id CHAR(64) NOT NULL,
   workflow_id VARCHAR(255) NOT NULL,
-  current_run_id CHAR(64) NOT NULL,
+  --
+  run_id CHAR(64) NOT NULL,
+  create_request_id CHAR(64) NOT NULL,
+	state INT NOT NULL,
+	close_status INT NOT NULL,
+  start_version BIGINT,
   PRIMARY KEY (shard_id, domain_id, workflow_id)
 );

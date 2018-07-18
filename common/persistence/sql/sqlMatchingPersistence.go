@@ -93,9 +93,21 @@ type (
 		ClientLibraryVersion         string    `db:"client_library_version"`
 		ClientFeatureVersion         string    `db:"client_feature_version"`
 		ClientImpl                   string    `db:"client_impl"`
-		ShardID                      string    `db:"shard_id"`
+		ShardID                      int    `db:"shard_id"`
 	}
-)
+
+	currentExecutionRow struct {
+		ShardID int64 `db:"shard_id"`
+		DomainID string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+
+		RunID string `db:"run_id"`
+		CreateRequestID string `db:"create_request_id"`
+		State int64 `db:"state"`
+		CloseStatus int64 `db:"close_status"`
+		StartVersion *int64 `db:"start_version"`
+	}
+	)
 
 const (
 	executionsNonNullableColumns = `shard_id,
@@ -202,10 +214,10 @@ VALUES
 		executionsCancelColumns + "," +
 		executionsReplicationStateColumns +
 		` FROM executions WHERE
-shard_id = :shard_id AND
-domain_id = :domain_id AND
-workflow_id = :workflow_id AND
-run_id = :run_id`
+shard_id = ? AND
+domain_id = ? AND
+workflow_id = ? AND
+run_id = ?`
 
 	getTransferTasksSQLQuery = `SELECT
 domain_id,
@@ -224,6 +236,17 @@ FROM transfer_tasks
 WHERE
 task_id >= :min_read_level AND
 task_id <= :max_read_level
+`
+
+	createCurrentExecutionSQLQuery = `INSERT INTO current_executions
+(shard_id, domain_id, workflow_id, run_id, create_request_id, state, close_status, start_version) VALUES
+(:shard_id, :domain_id, :workflow_id, :run_id, :create_request_id, :state, :close_status, :start_version)`
+
+	getCurrentExecutionSQLQuery = `SELECT 
+shard_id, domain_id, workflow_id, run_id, state, close_status, start_version 
+FROM current_executions
+WHERE
+shard_id = ? AND domain_id = ? AND workflow_id = ?
 `
 )
 
@@ -249,7 +272,7 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 	}
 	defer tx.Rollback()
 
-	if row, err := getExecutionsRowIfExists(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId, *request.Execution.RunId); err == nil {
+	if row, err := getCurrentExecutionIfExists(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId); err == nil {
 		// Workflow already exists.
 		startVersion := common.EmptyVersion
 		if row.StartVersion != nil {
@@ -266,44 +289,15 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 		}
 	}
 
-	nowTimestamp := time.Now()
-	_, err = m.db.NamedExec(createExecutionWithNoParentSQLQuery, executionRow{
-		DomainID:                   request.DomainID,
-		WorkflowID:                 *request.Execution.WorkflowId,
-		RunID:                      *request.Execution.RunId,
-		TaskList:                   request.TaskList,
-		WorkflowTypeName:           request.WorkflowTypeName,
-		WorkflowTimeoutSeconds:     int64(request.WorkflowTimeout),
-		DecisionTaskTimeoutMinutes: int64(request.DecisionTimeoutValue),
-		State:                        persistence.WorkflowStateCreated,
-		CloseStatus:                  persistence.WorkflowCloseStatusNone,
-		LastFirstEventID:             common.FirstEventID,
-		NextEventID:                  request.NextEventID,
-		LastProcessedEvent:           request.LastProcessedEvent,
-		StartTime:                    nowTimestamp,
-		LastUpdatedTime:              nowTimestamp,
-		CreateRequestID:              request.RequestID,
-		DecisionVersion:              int64(request.DecisionVersion),
-		DecisionScheduleID:           int64(request.DecisionScheduleID),
-		DecisionStartedID:            int64(request.DecisionStartedID),
-		DecisionTimeout:              int64(request.DecisionStartToCloseTimeout),
-		DecisionAttempt:              0,
-		DecisionTimestamp:            0,
-		StickyTaskList:               "",
-		StickyScheduleToStartTimeout: 0,
-		ClientLibraryVersion:         "",
-		ClientFeatureVersion:         "",
-		ClientImpl:                   "",
-	})
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into executions table. Error: %v", err),
-		}
+	if err := createCurrentExecution(tx, request, m.shardID); err != nil {
+		return nil, err
 	}
 
+	if err := createExecution(tx, request, m.shardID); err != nil {
+		return nil, err
+	}
 
 	if err := lockShard(tx, m.shardID); err != nil {
-
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Error: %v", err),
 		}
@@ -487,28 +481,85 @@ func NewSqlMatchingPersistence(username, password, host, port, dbName string) (p
 	}, nil
 }
 
-func getExecutionsRowIfExists(tx *sqlx.Tx, shardID int, domainId string, workflowId string, runId string) (*executionRow, error) {
-	stmt, err := tx.PrepareNamed(getExecutionSQLQuery)
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to prepare named statement. Error: %v", err),
-		}
-	}
-
+func getExecutionsRowIfExists(tx *sqlx.Tx, shardID int, domainID string, workflowID string, runID string) (*executionRow, error) {
 	var result executionRow
-	if err := stmt.Get(&result, struct {
-		ShardId    int    `db:"shard_id"`
-		DomainId   string `db:"domain_id"`
-		WorkflowId string `db:"workflow_id"`
-		RunId      string `db:"run_id"`
-	}{shardID,
-		domainId,
-		workflowId,
-		runId}); err != nil {
+	if err := tx.Get(&result,
+		getExecutionSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
 		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to get executions row for (shard,domain,workflow,run) = (%v, %v, %v, %v). Error: %v", shardID, domainId, workflowId, runId, err),
+			Message: fmt.Sprintf("Failed to get executions row for (shard,domain,workflow,run) = (%v, %v, %v, %v). Error: %v", shardID, domainID, workflowID, runID, err),
 		}
 	}
 
 	return &result, nil
+}
+
+func getCurrentExecutionIfExists(tx *sqlx.Tx, shardID int, domainID string, workflowID string) (*currentExecutionRow, error) {
+	var row currentExecutionRow
+	if err := tx.Get(&row, getCurrentExecutionSQLQuery, shardID, domainID, workflowID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get current_executions row for (shard,domain,workflow) = (%v, %v, %v). Error: %v", shardID, domainID, workflowID, err),
+		}
+	}
+	return &row, nil
+}
+
+func createExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRequest, shardID int) error {
+	nowTimestamp := time.Now()
+	_, err := tx.NamedExec(createExecutionWithNoParentSQLQuery, executionRow{
+		ShardID: shardID,
+		DomainID:                   request.DomainID,
+		WorkflowID:                 *request.Execution.WorkflowId,
+		RunID:                      *request.Execution.RunId,
+		TaskList:                   request.TaskList,
+		WorkflowTypeName:           request.WorkflowTypeName,
+		WorkflowTimeoutSeconds:     int64(request.WorkflowTimeout),
+		DecisionTaskTimeoutMinutes: int64(request.DecisionTimeoutValue),
+		State:                        persistence.WorkflowStateCreated,
+		CloseStatus:                  persistence.WorkflowCloseStatusNone,
+		LastFirstEventID:             common.FirstEventID,
+		NextEventID:                  request.NextEventID,
+		LastProcessedEvent:           request.LastProcessedEvent,
+		StartTime:                    nowTimestamp,
+		LastUpdatedTime:              nowTimestamp,
+		CreateRequestID:              request.RequestID,
+		DecisionVersion:              int64(request.DecisionVersion),
+		DecisionScheduleID:           int64(request.DecisionScheduleID),
+		DecisionStartedID:            int64(request.DecisionStartedID),
+		DecisionTimeout:              int64(request.DecisionStartToCloseTimeout),
+		DecisionAttempt:              0,
+		DecisionTimestamp:            0,
+		StickyTaskList:               "",
+		StickyScheduleToStartTimeout: 0,
+		ClientLibraryVersion:         "",
+		ClientFeatureVersion:         "",
+		ClientImpl:                   "",
+	})
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into executions table. Error: %v", err),
+		}
+	}
+	return nil
+}
+
+func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRequest, shardID int) error {
+	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, currentExecutionRow{
+		ShardID: int64(shardID),
+		DomainID: request.DomainID,
+		WorkflowID: *request.Execution.WorkflowId,
+		RunID: *request.Execution.RunId,
+		CreateRequestID: request.RequestID,
+		State: persistence.WorkflowStateRunning,
+		CloseStatus: persistence.WorkflowCloseStatusNone,
+		StartVersion: nil,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into current_executions table. Error: %v", err),
+		}
+	}
+	return nil
 }

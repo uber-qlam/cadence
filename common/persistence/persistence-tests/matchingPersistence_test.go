@@ -92,12 +92,7 @@ func (s *matchingPersistenceSuite) TestPersistenceStartWorkflow() {
 	s.True(ok)
 	s.Equal(workflowExecution.GetRunId(), startedErr.RunID, startedErr.Msg)
 
-	// For Cassandra implementation, the conflict row  (startedErr) could be either the concrete or the current execution row
-	// For the concrete row, the state would be WorkflowStateCreated.
-	// For the current row, the state would be WorkflowStateRunning.
-	s.True((startedErr.State == persistence.WorkflowStateRunning) || (startedErr.State == persistence.WorkflowStateCreated),
-startedErr.Msg)
-
+	s.Equal(persistence.WorkflowStateRunning, startedErr.State, startedErr.Msg)
 
 	s.Equal(persistence.WorkflowCloseStatusNone, startedErr.CloseStatus, startedErr.Msg)
 	s.Equal(common.EmptyVersion, startedErr.StartVersion, startedErr.Msg)
