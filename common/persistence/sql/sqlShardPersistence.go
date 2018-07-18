@@ -89,7 +89,7 @@ cluster_transfer_ack_level,
 cluster_timer_ack_level,
 domain_notification_version
 FROM shards WHERE
-shard_id = :shard_id
+shard_id = ?
 `
 
 	updateShardSQLQuery = `UPDATE
@@ -111,8 +111,7 @@ shard_id = :shard_id AND
 range_id = :old_range_id
 `
 
-	lockShardSQLQuery   = `SELECT 1 FROM shards WHERE shard_id = ? FOR UPDATE`
-	updateLeaseSQLQuery = `SELECT 1 FROM shards WHERE shard_id = ? AND range_id = ?`
+	lockShardSQLQuery   = `SELECT range_id FROM shards WHERE shard_id = ? FOR UPDATE`
 )
 
 func NewShardPersistence(username, password, host, port, dbName string) (persistence.ShardManager, error) {
@@ -164,18 +163,8 @@ func (m *sqlShardManager) CreateShard(request *persistence.CreateShardRequest) e
 }
 
 func (m *sqlShardManager) GetShard(request *persistence.GetShardRequest) (*persistence.GetShardResponse, error) {
-	stmt, err := m.db.PrepareNamed(getShardSQLQuery)
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("GetShard operation failed. Failed to prepare statement. ShardId: %v. Error: %v", request.ShardID),
-		}
-	}
-
 	var row shardsRow
-	err = stmt.Get(&row, struct {
-		ShardID int `db:"shard_id"`
-	}{request.ShardID})
-	if err != nil {
+	if err := m.db.Get(&row, getShardSQLQuery, request.ShardID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, &workflow.EntityNotExistsError{
 				Message: fmt.Sprintf("GetShard operation failed. Shard with ID %v not found. Error: %v", request.ShardID, err),
@@ -231,12 +220,6 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 	}
 	defer tx.Rollback()
 
-	if err := lockShard(tx, request.ShardInfo.ShardID); err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateShard operation failed. Failed to lock shard. Error: %v", err),
-		}
-	}
-
 	row, err := shardInfoToShardsRow(*request.ShardInfo)
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -269,7 +252,13 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 		}
 	case rowsAffected > 1:
 		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdatedShard operation failed. Tried to update %v shards.", rowsAffected),
+			Message: fmt.Sprintf("UpdatedShard operation failed. Tried to update %v shards instead of one.", rowsAffected),
+		}
+	}
+
+	if err := lockShard(tx, request.ShardInfo.ShardID, request.ShardInfo.RangeID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateShard operation failed. Failed to lock shard. Error: %v", err),
 		}
 	}
 
@@ -283,12 +272,10 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 	return nil
 }
 
-func lockShard(tx *sqlx.Tx, shardID int) error {
-	var dummy struct {
-		Foo int `db:"1"`
-	}
+func lockShard(tx *sqlx.Tx, shardID int, oldRangeID int64) error {
+	var rangeID int64
 
-	err := tx.Get(&dummy, lockShardSQLQuery, shardID)
+	err := tx.Get(&rangeID, lockShardSQLQuery, shardID)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -301,30 +288,13 @@ func lockShard(tx *sqlx.Tx, shardID int) error {
 		}
 	}
 
-	// Successfully "scanned" the dummy row, which means there was a result.
-	return nil
-}
-
-func updateShardLease(tx *sqlx.Tx, shardID int, rangeID int64) error {
-	var dummy struct {
-		Foo int `db:"1"`
-	}
-
-	err := tx.Get(&dummy, updateLeaseSQLQuery, shardID, rangeID)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return &persistence.ShardOwnershipLostError{
-				ShardID: shardID,
-				Msg:     fmt.Sprintf("Failed to update shard. Previous range ID: %v", rangeID),
-			}
-		}
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to update lease with shard with ID: %v. Error: %v", shardID, err),
+	if rangeID != oldRangeID {
+		return &persistence.ShardOwnershipLostError{
+			ShardID: shardID,
+			Msg:     fmt.Sprintf("Failed to update shard. Previous range ID: %v; new range ID: %v", oldRangeID, rangeID),
 		}
 	}
 
-	// Successfully "scanned" the dummy row, which means there was one row for a result.
 	return nil
 }
 

@@ -297,13 +297,7 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 		return nil, err
 	}
 
-	if err := lockShard(tx, m.shardID); err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Error: %v", err),
-		}
-	}
-
-	if err := updateShardLease(tx, m.shardID, request.RangeID); err != nil {
+	if err := lockShard(tx, m.shardID, request.RangeID); err != nil {
 		switch err.(type) {
 		case *persistence.ShardOwnershipLostError:
 			return nil, err
@@ -324,23 +318,12 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 }
 
 func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkflowExecutionRequest) (*persistence.GetWorkflowExecutionResponse, error) {
-	stmt, err := m.db.PrepareNamed(getExecutionSQLQuery)
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to prepare named statement. Error: %v", err),
-		}
-	}
-
 	var result executionRow
-	if err := stmt.Get(&result, struct {
-		ShardId    int    `db:"shard_id"`
-		DomainId   string `db:"domain_id"`
-		WorkflowId string `db:"workflow_id"`
-		RunId      string `db:"run_id"`
-	}{m.shardID,
+	if err := m.db.Get(&result, getExecutionSQLQuery,
+		m.shardID,
 		request.DomainID,
 		*request.Execution.WorkflowId,
-		*request.Execution.RunId}); err != nil {
+		*request.Execution.RunId); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, &workflow.EntityNotExistsError{
 				Message: fmt.Sprintf("Workflow execution not found.  WorkflowId: %v, RunId: %v",
