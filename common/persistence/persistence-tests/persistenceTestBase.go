@@ -246,17 +246,11 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		for _, filename := range []string{
-			"../sql/domains.sql",
-			"../sql/executions.sql",
-			"../sql/shards.sql",
-		} {
-			file, err := ioutil.ReadFile(filename)
-			if err != nil {
-				log.Fatal(err)
-			}
-			db.MustExec(string(file))
+		file, err := ioutil.ReadFile("../sql/schema/up.sql")
+		if err != nil {
+			log.Fatal(err)
 		}
+		db.MustExec(string(file))
 
 		db.Close()
 	}
@@ -1107,19 +1101,17 @@ func (s *TestBase) SetupWorkflowStore() {
 func (s *TestBase) TearDownWorkflowStore() {
 	if s.UseMysql {
 		db, err := sqlx.Connect("mysql",
-			"uber:uber@tcp(localhost:3306)/catalyst_test")
+			fmt.Sprintf(sql.Dsn, "uber", "uber", "localhost", "3306", "catalyst_test"))
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		for _, s := range []string{"domains",
-			"domain_metadata",
-			"executions",
-			"current_executions",
-			"shards",
-			"transfer_tasks"} {
-			db.MustExec("drop table if exists " + s)
+		file, err := ioutil.ReadFile("../sql/schema/down.sql")
+		if err != nil {
+			log.Fatal(err)
 		}
+		db.MustExec(string(file))
+
 		db.Close()
 	} else {
 		s.CassandraTestCluster.tearDownTestCluster()

@@ -205,13 +205,6 @@ func (m *sqlShardManager) GetShard(request *persistence.GetShardRequest) (*persi
 }
 
 func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) error {
-	_, err := m.GetShard(&persistence.GetShardRequest{request.ShardInfo.ShardID})
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateShard operation failed. Failed to check if shard exists. Error: %v", err),
-		}
-	}
-
 	tx, err := m.db.Beginx()
 	if err != nil {
 		return &workflow.InternalServiceError{
