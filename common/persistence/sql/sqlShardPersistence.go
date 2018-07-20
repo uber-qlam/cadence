@@ -133,29 +133,16 @@ func (m *sqlShardManager) Close() {
 }
 
 func (m *sqlShardManager) CreateShard(request *persistence.CreateShardRequest) error {
-	_, err := m.GetShard(&persistence.GetShardRequest{request.ShardInfo.ShardID})
-	if err == nil {
-		// The shard already exists.
-		return &persistence.ShardAlreadyExistError{
-			Msg: fmt.Sprintf("CreateShard operation failed. Shard already exists. ShardId: %v, RangeId: %v", request.ShardInfo.ShardID, request.ShardInfo.RangeID),
+	row, err := shardInfoToShardsRow(*request.ShardInfo)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateShard operation failed. Error: %v", err),
 		}
-	} else {
-		switch err.(type) {
-		case *workflow.EntityNotExistsError:
-			row, err := shardInfoToShardsRow(*request.ShardInfo)
-			if err != nil {
-				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("CreateShard operation failed. Error: %v", err),
-				}
-			}
+	}
 
-			if _, err := m.db.NamedExec(createShardSQLQuery, row); err != nil {
-				return nil
-			}
-		default:
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("CreateShard operation failed. Failed to verify whether a shard of ID %v already existed. Error: %v", request.ShardInfo.ShardID, err),
-			}
+	if _, err := m.db.NamedExec(createShardSQLQuery, row); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateShard operation failed. Failed to insert into shards table. Error: %v", err),
 		}
 	}
 
@@ -205,14 +192,6 @@ func (m *sqlShardManager) GetShard(request *persistence.GetShardRequest) (*persi
 }
 
 func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) error {
-	tx, err := m.db.Beginx()
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateShard operation failed. Failed to begin transaction. Error: %v", err),
-		}
-	}
-	defer tx.Rollback()
-
 	row, err := shardInfoToShardsRow(*request.ShardInfo)
 	if err != nil {
 		return &workflow.InternalServiceError{
@@ -220,7 +199,7 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 		}
 	}
 
-	result, err := tx.NamedExec(updateShardSQLQuery, struct {
+	result, err := m.db.NamedExec(updateShardSQLQuery, struct {
 		shardsRow
 		OldRangeID int64 `db:"old_range_id"`
 	}{*row, request.PreviousRangeID})
@@ -246,19 +225,6 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 	case rowsAffected > 1:
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdatedShard operation failed. Tried to update %v shards instead of one.", rowsAffected),
-		}
-	}
-
-	if err := lockShard(tx, request.ShardInfo.ShardID, request.ShardInfo.RangeID); err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateShard operation failed. Failed to lock shard. Error: %v", err),
-		}
-	}
-
-	// Exactly 1 row was updated: the correct behaviour.
-	if err := tx.Commit(); err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdatedShard operation failed. Failed to commit transaction. Error: %v", err),
 		}
 	}
 
