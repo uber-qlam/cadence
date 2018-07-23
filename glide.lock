@@ -1,5 +1,5 @@
-hash: e6bf157cdefddd412f202cb07b2cfb5bc2d478bde6cdcad4d60aa37df00ac4cd
-updated: 2018-07-10T15:15:00.977236815-07:00
+hash: c2b9bc6e36071afd27ff7418eccb00f413bb96516466463bd5cc75aead445ef6
+updated: 2018-07-17T15:21:48.917410234-07:00
 imports:
 - name: github.com/apache/thrift
   version: 53dd39833a08ce33582e5ff31fa18bb4735d6731
@@ -64,6 +64,8 @@ imports:
   version: 553a641470496b2327abcac10b36396bd98e45c9
 - name: github.com/hailocab/go-hostpool
   version: e80d13ce29ede4452c43dea11e79b9bc8a15b478
+- name: github.com/hmgle/sqlx
+  version: 22027eaedbbe25383d27e64fa63d2f72176f81ec
 - name: github.com/jmoiron/sqlx
   version: 2aeb6a910c2b94f2d5eb53d9895d80e27264ec41
   subpackages:

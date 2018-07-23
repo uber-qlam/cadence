@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"database/sql"
-	"github.com/jmoiron/sqlx"
+	"github.com/hmgle/sqlx"
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common/persistence"
 )

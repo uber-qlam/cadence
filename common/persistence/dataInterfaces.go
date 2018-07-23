@@ -108,6 +108,9 @@ const (
 	// TransferTaskTransferTargetWorkflowID is the the dummy workflow ID for transfer tasks of types
 	// that do not have a target workflow
 	TransferTaskTransferTargetWorkflowID = "20000000-0000-f000-f000-000000000001"
+	// TransferTaskTypeTransferTargetRunID is the dummy run ID for transfer tasks of types that do not
+	// have a target run ID
+	TransferTaskTypeTransferTargetRunID = "30000000-0000-f000-f000-000000000002"
 )
 
 type (
@@ -219,7 +222,7 @@ type (
 		TaskList                string `db:"task_list"`
 		TaskType                int    `db:"type"`
 		ScheduleID              int64  `db:"schedule_id"`
-		Version                 int64  `db:"version_id"`
+		Version                 int64  `db:"version"`
 	}
 
 	// ReplicationTaskInfo describes the replication task created for replication of history events

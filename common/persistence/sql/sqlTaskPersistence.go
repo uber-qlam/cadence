@@ -22,7 +22,8 @@ package sql
 
 import (
 	"fmt"
-	"github.com/jmoiron/sqlx"
+
+	"github.com/hmgle/sqlx"
 	"github.com/uber/cadence/common/persistence"
 )
 
