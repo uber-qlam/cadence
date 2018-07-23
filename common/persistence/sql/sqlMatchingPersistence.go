@@ -836,8 +836,8 @@ func (m *sqlMatchingManager) createTransferTasks(tx *sqlx.Tx, transferTasks []pe
 		case persistence.TransferTaskTypeSignalExecution:
 			structs[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
 			structs[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
-			if task.(*persistence.CancelExecutionTask).TargetRunID != "" {
-				structs[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
+			if task.(*persistence.SignalExecutionTask).TargetRunID != "" {
+				structs[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
 			}
 			structs[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
 			structs[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
