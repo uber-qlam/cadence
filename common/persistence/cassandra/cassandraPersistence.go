@@ -45,8 +45,8 @@ const (
 	// Special Domains related constants
 	emptyDomainID = "10000000-0000-f000-f000-000000000000"
 	// Special Run IDs
-	emptyRunID                          = "30000000-0000-f000-f000-000000000000"
-	permanentRunID                      = "30000000-0000-f000-f000-000000000001"
+	emptyRunID     = "30000000-0000-f000-f000-000000000000"
+	permanentRunID = "30000000-0000-f000-f000-000000000001"
 	// Row Constants for Shard Row
 	rowTypeShardDomainID   = "10000000-1000-f000-f000-000000000000"
 	rowTypeShardWorkflowID = "20000000-1000-f000-f000-000000000000"
