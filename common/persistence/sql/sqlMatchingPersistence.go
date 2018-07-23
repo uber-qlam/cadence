@@ -263,6 +263,12 @@ domain_id = ? AND
 workflow_id = ? AND
 run_id = ?`
 
+	deleteExecutionSQLQuery = `DELETE FROM executions WHERE
+shard_id = ? AND
+domain_id = ? AND
+workflow_id = ? AND
+run_id = ?`
+
 	transferTaskInfoColumns = `domain_id,
 workflow_id,
 run_id,
@@ -618,8 +624,13 @@ func (*sqlMatchingManager) ResetMutableState(request *persistence.ResetMutableSt
 	panic("implement me")
 }
 
-func (*sqlMatchingManager) DeleteWorkflowExecution(request *persistence.DeleteWorkflowExecutionRequest) error {
-	panic("implement me")
+func (m *sqlMatchingManager) DeleteWorkflowExecution(request *persistence.DeleteWorkflowExecutionRequest) error {
+	if _, err := m.db.Exec(deleteExecutionSQLQuery, m.shardID, request.DomainID, request.WorkflowID, request.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("DeleteWorkflowExecution operation failed. Error: %v", err),
+		}
+	}
+	return nil
 }
 
 func (m *sqlMatchingManager) GetCurrentExecution(request *persistence.GetCurrentExecutionRequest) (*persistence.GetCurrentExecutionResponse, error) {
