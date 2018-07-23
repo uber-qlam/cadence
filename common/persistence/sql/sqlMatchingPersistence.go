@@ -622,8 +622,19 @@ func (*sqlMatchingManager) DeleteWorkflowExecution(request *persistence.DeleteWo
 	panic("implement me")
 }
 
-func (*sqlMatchingManager) GetCurrentExecution(request *persistence.GetCurrentExecutionRequest) (*persistence.GetCurrentExecutionResponse, error) {
-	return &persistence.GetCurrentExecutionResponse{}, nil
+func (m *sqlMatchingManager) GetCurrentExecution(request *persistence.GetCurrentExecutionRequest) (*persistence.GetCurrentExecutionResponse, error) {
+	var row currentExecutionRow
+	if err := m.db.Get(&row, getCurrentExecutionSQLQuery, m.shardID, request.DomainID, request.WorkflowID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetCurrentExecution operation failed. Error: %v", err),
+		}
+	}
+	return &persistence.GetCurrentExecutionResponse{
+		StartRequestID: row.CreateRequestID,
+		RunID: row.RunID,
+		State: int(row.State),
+		CloseStatus: int(row.CloseStatus),
+	}, nil
 }
 
 func (m *sqlMatchingManager) GetTransferTasks(request *persistence.GetTransferTasksRequest) (*persistence.GetTransferTasksResponse, error) {
