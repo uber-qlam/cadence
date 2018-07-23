@@ -303,8 +303,8 @@ version`
 ` + transferTaskInfoColumns +
 `
 FROM transfer_tasks WHERE
-task_id >= :min_read_level AND
-task_id <= :max_read_level
+task_id > ? AND
+task_id <= ?
 `
 
 	createCurrentExecutionSQLQuery = `INSERT INTO current_executions
@@ -606,11 +606,17 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
-	// TODO add to the tasks.
+	if err := m.createTransferTasks(tx,
+		request.TransferTasks,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to create transfer tasks. Error: %v", err),
+		}
+	}
 
-
-
-	//commit
 	if err := tx.Commit(); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to commit transaction. Error: %v", err),
@@ -649,18 +655,11 @@ func (m *sqlMatchingManager) GetCurrentExecution(request *persistence.GetCurrent
 }
 
 func (m *sqlMatchingManager) GetTransferTasks(request *persistence.GetTransferTasksRequest) (*persistence.GetTransferTasksResponse, error) {
-	stmt, err := m.db.PrepareNamed(getTransferTasksSQLQuery)
-	if err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("GetTransferTasks operation failed. Failed to prepare statement. Error: %v", err),
-		}
-	}
-
 	var resp persistence.GetTransferTasksResponse
-	if err := stmt.Select(&resp.Tasks, struct{
-		MinReadLevel int64 `db:"min_read_level"`
-		MaxReadLevel int64 `db:"max_read_level"`
-	}{request.ReadLevel + 1, request.MaxReadLevel}); err != nil {
+	if err := m.db.Select(&resp.Tasks,
+		getTransferTasksSQLQuery,
+		request.ReadLevel,
+		request.MaxReadLevel); err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("GetTransferTasks operation failed. Select failed. Error: %v", err),
 		}
