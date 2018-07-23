@@ -164,7 +164,7 @@ func (s *matchingPersistenceSuite) TestPersistenceStartWorkflowWithReplicationSt
 
 	response, err2 := s.WorkflowMgr.CreateWorkflowExecution(&persistence.CreateWorkflowExecutionRequest{
 		RequestID:            uuid.New(),
-		DomainID:             domainID,
+		DomainID:             domainID + "foo",
 		Execution:            workflowExecution,
 		TaskList:             "queue1",
 		WorkflowTypeName:     "workflow_type_test",

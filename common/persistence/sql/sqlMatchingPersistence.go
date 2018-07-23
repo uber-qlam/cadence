@@ -764,16 +764,20 @@ func createExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRe
 }
 
 func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRequest, shardID int) error {
-	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, currentExecutionRow{
-		ShardID:         int64(shardID),
-		DomainID:        request.DomainID,
-		WorkflowID:      *request.Execution.WorkflowId,
-		RunID:           *request.Execution.RunId,
-		CreateRequestID: request.RequestID,
-		State:           persistence.WorkflowStateRunning,
-		CloseStatus:     persistence.WorkflowCloseStatusNone,
-		StartVersion:    nil,
-	}); err != nil {
+	arg := currentExecutionRow{
+			ShardID:         int64(shardID),
+			DomainID:        request.DomainID,
+			WorkflowID:      *request.Execution.WorkflowId,
+			RunID:           *request.Execution.RunId,
+			CreateRequestID: request.RequestID,
+			State:           persistence.WorkflowStateRunning,
+			CloseStatus:     persistence.WorkflowCloseStatusNone,
+	}
+	if request.ReplicationState != nil {
+		arg.StartVersion = &request.ReplicationState.StartVersion
+	}
+
+	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, arg); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into current_executions table. Error: %v", err),
 		}
