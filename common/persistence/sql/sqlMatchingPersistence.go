@@ -626,7 +626,7 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 }
 
 func (*sqlMatchingManager) ResetMutableState(request *persistence.ResetMutableStateRequest) error {
-	panic("implement me")
+	return nil
 }
 
 func (m *sqlMatchingManager) DeleteWorkflowExecution(request *persistence.DeleteWorkflowExecutionRequest) error {
@@ -684,15 +684,15 @@ func (*sqlMatchingManager) GetReplicationTasks(request *persistence.GetReplicati
 }
 
 func (*sqlMatchingManager) CompleteReplicationTask(request *persistence.CompleteReplicationTaskRequest) error {
-	panic("implement me")
+	return nil
 }
 
 func (*sqlMatchingManager) GetTimerIndexTasks(request *persistence.GetTimerIndexTasksRequest) (*persistence.GetTimerIndexTasksResponse, error) {
-	panic("implement me")
+	return &persistence.GetTimerIndexTasksResponse{}, nil
 }
 
 func (*sqlMatchingManager) CompleteTimerTask(request *persistence.CompleteTimerTaskRequest) error {
-	panic("implement me")
+	return nil
 }
 
 func NewSqlMatchingPersistence(username, password, host, port, dbName string) (persistence.ExecutionManager, error) {

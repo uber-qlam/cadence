@@ -336,7 +336,7 @@ func (m *sqlTaskManager) GetTasks(request *persistence.GetTasksRequest) (*persis
 }
 
 func (m *sqlTaskManager) CompleteTask(request *persistence.CompleteTaskRequest) error {
-	panic("implement me")
+	return nil
 }
 
 func lockAndCheckTaskListRangeID(tx *sqlx.Tx, domainID, name string, taskListType int, oldRangeID int64) error {
