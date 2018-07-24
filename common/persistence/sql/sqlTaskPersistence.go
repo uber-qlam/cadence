@@ -65,7 +65,7 @@ VALUES
 
 	// (default range ID: initialRangeID == 1)
 	createTaskListSQLQuery = `INSERT ` + taskListCreatePart
-	
+
 	updateTaskListWithTTLSQLQuery = `REPLACE ` + taskListCreatePart
 
 	updateTaskListSQLQuery = `UPDATE task_lists SET
@@ -97,6 +97,17 @@ type = ?
 (domain_id, workflow_id, run_id, schedule_id, task_list_name, task_list_type, task_id, expiry_ts)
 VALUES
 (:domain_id, :workflow_id, :run_id, :schedule_id, :task_list_name, :task_list_type, :task_id, :expiry_ts)`
+
+	getTaskSQLQuery = `SELECT
+domain_id, workflow_id, run_id, schedule_id, task_list_name, task_list_type, task_id, expiry_ts
+FROM tasks
+WHERE
+domain_id = ? AND
+task_list_name = ? AND 
+task_list_type = ? AND
+task_id > ? AND
+task_id <= ?
+`
 )
 
 func NewTaskPersistence(username, password, host, port, dbName string) (persistence.TaskManager, error) {
@@ -352,7 +363,27 @@ func (m *sqlTaskManager) CreateTasks(request *persistence.CreateTasksRequest) (*
 }
 
 func (m *sqlTaskManager) GetTasks(request *persistence.GetTasksRequest) (*persistence.GetTasksResponse, error) {
-	return &persistence.GetTasksResponse{[](*persistence.TaskInfo){}}, nil
+	var rows []tasksRow
+	if err := m.db.Select(&rows, getTaskSQLQuery, request.DomainID, request.TaskList, request.TaskType, request.ReadLevel, request.MaxReadLevel);
+	err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetTasks operation failed. Failed to get rows. Error: %v", err),
+		}
+	}
+
+	var tasks = make([]*persistence.TaskInfo, len(rows))
+	for i, v := range rows {
+		tasks[i] = &persistence.TaskInfo{
+			v.DomainID,
+			v.WorkflowID,
+			v.RunID,
+			v.TaskID,
+			v.ScheduleID,
+			0,
+		}
+	}
+
+	return &persistence.GetTasksResponse{tasks}, nil
 }
 
 func (m *sqlTaskManager) CompleteTask(request *persistence.CompleteTaskRequest) error {
