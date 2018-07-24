@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS current_executions(
   PRIMARY KEY (shard_id, domain_id, workflow_id)
 );
 
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   domain_id VARCHAR(64) NOT NULL,
   workflow_id VARCHAR(255) NOT NULL,
   run_id VARCHAR(64) NOT NULL,
@@ -157,7 +157,7 @@ CREATE TABLE tasks (
   PRIMARY KEY (domain_id, task_list_name, task_list_type, task_id)
 );
 
-CREATE TABLE task_lists (
+CREATE TABLE IF NOT EXISTS task_lists (
 	domain_id VARCHAR(64) NOT NULL,
 	range_id BIGINT NOT NULL,
 	name VARCHAR(255) NOT NULL,
@@ -168,3 +168,17 @@ CREATE TABLE task_lists (
 	PRIMARY KEY (domain_id, name, type)
 );
 
+CREATE TABLE IF NOT EXISTS replication_tasks (
+	domain_id VARCHAR(64) NOT NULL,
+	workflow_id VARCHAR(255) NOT NULL,
+	run_id VARCHAR(64) NOT NULL,
+	task_id BIGINT NOT NULL,
+	type TINYINT NOT NULL,
+	first_event_id BIGINT NOT NULL,
+	next_event_id BIGINT NOT NULL,
+	version BIGINT NOT NULL,
+  last_replication_info BLOB NOT NULL,
+--
+shard_id INT NOT NULL,
+PRIMARY KEY (shard_id, task_id)
+);

@@ -327,7 +327,7 @@ func (m *sqlTaskManager) CreateTasks(request *persistence.CreateTasksRequest) (*
 		}
 	}
 
-	query, args, err := m.db.BindNamed(createTaskSQLQuery, structs)
+	query, args, err := tx.BindNamed(createTaskSQLQuery, structs)
 	if err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateTasks operation failed. Failed to bind statement. Error: %v", err),
