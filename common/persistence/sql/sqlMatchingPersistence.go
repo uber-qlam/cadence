@@ -364,6 +364,21 @@ shard_id = ? AND
 task_id > ? AND
 task_id <= ?`
 
+	timerTaskInfoColumns = `domain_id, workflow_id, run_id, visibility_ts, task_id, type, timeout_type, event_id, schedule_attempt, version`
+	timerTaskInfoColumnsTags = `:domain_id, :workflow_id, :run_id, :visibility_ts, :task_id, :type, :timeout_type, :event_id, :schedule_attempt, :version`
+	timerTasksColumns = `shard_id,` + timerTaskInfoColumns
+	timerTasksColumnsTags = `:shard_id,` + timerTaskInfoColumnsTags
+	createTimerTasksSQLQuery = `INSERT INTO timer_tasks (` +
+		timerTasksColumns + `) VALUES (` +
+		timerTasksColumnsTags + `)`
+	getTimerTasksSQLQuery = `SELECT ` + timerTaskInfoColumns +
+		`
+FROM timer_tasks WHERE
+shard_id = ? AND
+visibility_ts >= ? AND
+visibility_ts < ?`
+	completeTimerTaskSQLQuery = `DELETE FROM timer_tasks WHERE shard_id = ? AND visibility_ts = ? AND task_id = ?`
+
 	lockAndCheckNextEventIdSQLQuery = `SELECT next_event_id FROM executions WHERE
 shard_id = ? AND
 domain_id = ? AND
@@ -444,6 +459,18 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 		*request.Execution.RunId); err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to create replication tasks. Error: %v", err),
+		}
+	}
+
+	if err := createTimerTasks(tx,
+		request.ReplicationTasks,
+		nil,
+		m.shardID,
+		request.DomainID,
+		*request.Execution.WorkflowId,
+		*request.Execution.RunId); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to create timer tasks. Error: %v", err),
 		}
 	}
 
@@ -567,12 +594,24 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 
 	if err := createReplicationTasks(tx,
 		request.ReplicationTasks,
-			m.shardID,
-				request.ExecutionInfo.DomainID,
-					request.ExecutionInfo.WorkflowID,
-						request.ExecutionInfo.RunID); err != nil {
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to create replication tasks. Error: %v", err),
+		}
+	}
+
+	if err := createTimerTasks(tx,
+		request.TimerTasks,
+		request.DeleteTimerTask,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to create timer tasks. Error: %v", err),
 		}
 	}
 
@@ -792,15 +831,31 @@ func (m *sqlMatchingManager) GetReplicationTasks(request *persistence.GetReplica
 	}, nil
 }
 
-func (*sqlMatchingManager) CompleteReplicationTask(request *persistence.CompleteReplicationTaskRequest) error {
+func (m *sqlMatchingManager) CompleteReplicationTask(request *persistence.CompleteReplicationTaskRequest) error {
 	return nil
 }
 
-func (*sqlMatchingManager) GetTimerIndexTasks(request *persistence.GetTimerIndexTasksRequest) (*persistence.GetTimerIndexTasksResponse, error) {
-	return &persistence.GetTimerIndexTasksResponse{}, nil
+func (m *sqlMatchingManager) GetTimerIndexTasks(request *persistence.GetTimerIndexTasksRequest) (*persistence.GetTimerIndexTasksResponse, error) {
+	var resp persistence.GetTimerIndexTasksResponse
+
+	if err := m.db.Select(&resp.Timers, getTimerTasksSQLQuery,
+		m.shardID,
+			request.MinTimestamp,
+				request.MaxTimestamp); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetTimerTasks operation failed. Select failed. Error: %v", err),
+		}
+	}
+
+	return &resp, nil
 }
 
-func (*sqlMatchingManager) CompleteTimerTask(request *persistence.CompleteTimerTaskRequest) error {
+func (m *sqlMatchingManager) CompleteTimerTask(request *persistence.CompleteTimerTaskRequest) error {
+	if _, err := m.db.Exec(completeTimerTaskSQLQuery, m.shardID, request.VisibilityTimestamp, request.TaskID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("CompleteTimerTask operation failed. Error: %v", err),
+		}
+	}
 	return nil
 }
 
@@ -997,6 +1052,7 @@ func createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID 
 
 	}
 
+
 	return nil
 }
 
@@ -1066,6 +1122,81 @@ func createReplicationTasks(tx *sqlx.Tx, replicationTasks []persistence.Task, sh
 		if int(rowsAffected) != len(replicationTasks) {
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("Failed to create replication tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(replicationTasks), err),
+			}
+		}
+	}
+
+	return nil
+}
+
+func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTask persistence.Task, shardID int, domainID, workflowID, runID string) error {
+	if len(timerTasks) > 0 {
+		structs := make([]struct{
+			persistence.TimerTaskInfo
+			ShardID int `db:"shard_id"`
+		}, len(timerTasks))
+
+		for i, task := range timerTasks {
+			switch t := task.(type) {
+			case *persistence.DecisionTimeoutTask:
+				structs[i].EventID = t.EventID
+				structs[i].TimeoutType = t.TimeoutType
+				structs[i].ScheduleAttempt = t.ScheduleAttempt
+			case *persistence.ActivityTimeoutTask:
+				structs[i].EventID = t.EventID
+				structs[i].TimeoutType = t.TimeoutType
+				structs[i].ScheduleAttempt = t.Attempt
+			case *persistence.UserTimerTask:
+				structs[i].EventID = t.EventID
+			case *persistence.RetryTimerTask:
+				structs[i].EventID = t.EventID
+				structs[i].ScheduleAttempt = int64(t.Attempt)
+			}
+
+
+			structs[i].ShardID = shardID
+			structs[i].DomainID = domainID
+			structs[i].WorkflowID = workflowID
+			structs[i].RunID = runID
+
+			structs[i].VisibilityTimestamp = persistence.GetVisibilityTSFrom(task)
+			structs[i].TaskID = task.GetTaskID()
+			structs[i].Version = task.GetVersion()
+			structs[i].TaskType = task.GetType()
+		}
+
+		query, args, err := tx.BindNamed(createTimerTasksSQLQuery, structs)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to create timer tasks. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to create timer tasks. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to create timer tasks. Could not verify number of rows inserted. Error: %v", err),
+				}
+			}
+
+			if int(rowsAffected) != len(timerTasks) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to create timer tasks. Inserted %v instead of %v rows into timer_tasks. Error: %v", rowsAffected, len(timerTasks), err),
+				}
+			}
+		}
+	}
+
+	if deleteTimerTask != nil {
+		if _, err := tx.Exec(completeTimerTaskSQLQuery, shardID, persistence.GetVisibilityTSFrom(deleteTimerTask), deleteTimerTask.GetTaskID());
+			err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to delete timer task. Task: %v. Error: %v", deleteTimerTask, err),
 			}
 		}
 	}

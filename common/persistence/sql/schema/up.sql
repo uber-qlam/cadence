@@ -182,3 +182,19 @@ CREATE TABLE IF NOT EXISTS replication_tasks (
 shard_id INT NOT NULL,
 PRIMARY KEY (shard_id, task_id)
 );
+
+CREATE TABLE timer_tasks (
+	domain_id VARCHAR(64) NOT NULL,
+	workflow_id VARCHAR(255) NOT NULL,
+	run_id VARCHAR(64) NOT NULL,
+	visibility_ts TIMESTAMP(3) NOT NULL,
+	task_id BIGINT NOT NULL,
+	type TINYINT NOT NULL,
+	timeout_type TINYINT NOT NULL,
+	event_id BIGINT NOT NULL,
+	schedule_attempt BIGINT NOT NULL,
+	version BIGINT NOT NULL,
+	--
+	shard_id INT NOT NULL,
+	PRIMARY KEY (shard_id, visibility_ts, task_id)
+);

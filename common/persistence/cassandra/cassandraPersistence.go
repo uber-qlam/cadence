@@ -2551,7 +2551,7 @@ func (d *cassandraPersistence) createTimerTasks(batch *gocql.Batch, timerTasks [
 			attempt = int64(t.Attempt)
 		}
 
-		ts := common.UnixNanoToCQLTimestamp(GetVisibilityTSFrom(task).UnixNano())
+		ts := common.UnixNanoToCQLTimestamp(persistence.GetVisibilityTSFrom(task).UnixNano())
 
 		batch.Query(templateCreateTimerTaskQuery,
 			d.shardID,
@@ -2574,7 +2574,7 @@ func (d *cassandraPersistence) createTimerTasks(batch *gocql.Batch, timerTasks [
 	}
 
 	if deleteTimerTask != nil {
-		ts := common.UnixNanoToCQLTimestamp(GetVisibilityTSFrom(deleteTimerTask).UnixNano())
+		ts := common.UnixNanoToCQLTimestamp(persistence.GetVisibilityTSFrom(deleteTimerTask).UnixNano())
 		batch.Query(templateCompleteTimerTaskQuery,
 			d.shardID,
 			rowTypeTimerTask,
@@ -3587,29 +3587,7 @@ func isThrottlingError(err error) bool {
 	return false
 }
 
-// GetVisibilityTSFrom - helper method to get visibility timestamp
-func GetVisibilityTSFrom(task persistence.Task) time.Time {
-	switch task.GetType() {
-	case persistence.TaskTypeDecisionTimeout:
-		return task.(*persistence.DecisionTimeoutTask).VisibilityTimestamp
 
-	case persistence.TaskTypeActivityTimeout:
-		return task.(*persistence.ActivityTimeoutTask).VisibilityTimestamp
-
-	case persistence.TaskTypeUserTimer:
-		return task.(*persistence.UserTimerTask).VisibilityTimestamp
-
-	case persistence.TaskTypeWorkflowTimeout:
-		return task.(*persistence.WorkflowTimeoutTask).VisibilityTimestamp
-
-	case persistence.TaskTypeDeleteHistoryEvent:
-		return task.(*persistence.DeleteHistoryEventTask).VisibilityTimestamp
-
-	case persistence.TaskTypeRetryTimer:
-		return task.(*persistence.RetryTimerTask).VisibilityTimestamp
-	}
-	return time.Time{}
-}
 
 // SetVisibilityTSFrom - helper method to set visibility timestamp
 func SetVisibilityTSFrom(task persistence.Task, t time.Time) {
