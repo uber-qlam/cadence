@@ -237,16 +237,16 @@ type (
 
 	// TimerTaskInfo describes a timer task.
 	TimerTaskInfo struct {
-		DomainID            string
-		WorkflowID          string
-		RunID               string
-		VisibilityTimestamp time.Time
-		TaskID              int64
-		TaskType            int
-		TimeoutType         int
-		EventID             int64
-		ScheduleAttempt     int64
-		Version             int64
+		DomainID            string `db:"domain_id"`
+		WorkflowID          string `db:"workflow_id"`
+		RunID               string `db:"run_id"`
+		VisibilityTimestamp time.Time `db:"visibility_ts"`
+		TaskID              int64 `db:"task_id"`
+		TaskType            int `db:"type"`
+		TimeoutType         int `db:"timeout_type"`
+		EventID             int64 `db:"event_id"`
+		ScheduleAttempt     int64 `db:"schedule_attempt"`
+		Version             int64 `db:"version"`
 	}
 
 	// TaskListInfo describes a state of a task list implementation.
@@ -1496,4 +1496,28 @@ func (config *ClusterReplicationConfig) serialize() map[string]interface{} {
 
 func (config *ClusterReplicationConfig) deserialize(input map[string]interface{}) {
 	config.ClusterName = input["cluster_name"].(string)
+}
+
+// GetVisibilityTSFrom - helper method to get visibility timestamp
+func GetVisibilityTSFrom(task Task) time.Time {
+	switch task.GetType() {
+	case TaskTypeDecisionTimeout:
+		return task.(*DecisionTimeoutTask).VisibilityTimestamp
+
+	case TaskTypeActivityTimeout:
+		return task.(*ActivityTimeoutTask).VisibilityTimestamp
+
+	case TaskTypeUserTimer:
+		return task.(*UserTimerTask).VisibilityTimestamp
+
+	case TaskTypeWorkflowTimeout:
+		return task.(*WorkflowTimeoutTask).VisibilityTimestamp
+
+	case TaskTypeDeleteHistoryEvent:
+		return task.(*DeleteHistoryEventTask).VisibilityTimestamp
+
+	case TaskTypeRetryTimer:
+		return task.(*RetryTimerTask).VisibilityTimestamp
+	}
+	return time.Time{}
 }
