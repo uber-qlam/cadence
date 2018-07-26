@@ -145,6 +145,9 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 		rangeID = row.RangeID
 		ackLevel = row.AckLevel
 
+		// We need to separately check the condition and do the
+		// update because we want to throw different error codes.
+		// Since we need to do things separately (in a transaction), we need to take a lock.
 		tx, err := m.db.Beginx()
 		if err != nil {
 			return nil, &workflow.InternalServiceError{
@@ -224,6 +227,10 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 	}
 	defer tx.Rollback()
 
+
+	// We need to separately check the condition and do the
+	// update because we want to throw different error codes.
+	// Since we need to do things separately (in a transaction), we need to take a lock.
 	if err := lockAndCheckTaskListRangeID(tx, request.TaskListInfo.DomainID, request.TaskListInfo.Name, request.TaskListInfo.TaskType, request.TaskListInfo.RangeID); err != nil {
 		switch err.(type) {
 		case *persistence.ConditionFailedError:

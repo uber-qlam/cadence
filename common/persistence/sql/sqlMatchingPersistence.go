@@ -30,12 +30,14 @@ import (
 
 	"github.com/hmgle/sqlx"
 	"github.com/uber/cadence/common"
+	"github.com/uber-common/bark"
 )
 
 type (
 	sqlMatchingManager struct {
 		db      *sqlx.DB
 		shardID int
+		logger             bark.Logger
 	}
 
 	FlatCreateWorkflowExecutionRequest struct {
@@ -694,7 +696,7 @@ func (*sqlMatchingManager) CompleteTimerTask(request *persistence.CompleteTimerT
 	return nil
 }
 
-func NewSqlMatchingPersistence(username, password, host, port, dbName string) (persistence.ExecutionManager, error) {
+func NewSqlMatchingPersistence(username, password, host, port, dbName string, logger bark.Logger) (persistence.ExecutionManager, error) {
 	var db, err = sqlx.Connect("mysql",
 		fmt.Sprintf(Dsn, username, password, host, port, dbName))
 	if err != nil {
@@ -703,6 +705,7 @@ func NewSqlMatchingPersistence(username, password, host, port, dbName string) (p
 
 	return &sqlMatchingManager{
 		db: db,
+		logger: logger,
 	}, nil
 }
 
@@ -832,8 +835,7 @@ func (m *sqlMatchingManager) createTransferTasks(tx *sqlx.Tx, transferTasks []pe
 			// No explicit property needs to be set
 
 		default:
-			// hmm what should i do here?
-			//d.logger.Fatal("Unknown Transfer Task.")
+			m.logger.Fatal("Unknown Transfer Task.")
 		}
 
 		transferTaskRows[i].TaskID = task.GetTaskID()
