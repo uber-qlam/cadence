@@ -55,6 +55,11 @@ type (
 		Kind     int64     `db:"kind"`
 		ExpiryTs time.Time `db:"expiry_ts"`
 	}
+
+	updateTaskListsRow struct {
+		tasksListsRow
+		OldRangeID int64 `db:"old_range_id"`
+	}
 )
 
 const (
@@ -139,7 +144,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 		if err == sql.ErrNoRows {
 			// The task list does not exist. Create it.
 			if _, err := m.db.NamedExec(createTaskListSQLQuery,
-				tasksListsRow{
+				&tasksListsRow{
 					DomainID: request.DomainID,
 					RangeID: rangeID + 1,
 					Name: request.TaskList,
@@ -185,10 +190,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 		}
 
 		if result, err := tx.NamedExec(updateTaskListSQLQuery,
-			struct {
-				tasksListsRow
-				OldRangeID int64 `db:"old_range_id"`
-			}{
+			&updateTaskListsRow{
 				tasksListsRow{
 					DomainID:row.DomainID,
 					RangeID: row.RangeID + 1,
@@ -238,7 +240,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListRequest) (*persistence.UpdateTaskListResponse, error) {
 	if request.TaskListInfo.Kind == persistence.TaskListKindSticky {
 		// If sticky, update with TTL
-		if _, err := m.db.NamedExec(updateTaskListWithTTLSQLQuery, tasksListsRow{
+		if _, err := m.db.NamedExec(updateTaskListWithTTLSQLQuery, &tasksListsRow{
 				DomainID: request.TaskListInfo.DomainID,
 				RangeID: request.TaskListInfo.RangeID,
 				Name: request.TaskListInfo.Name,
@@ -271,10 +273,7 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 			}
 		}
 		if result, err := tx.NamedExec(updateTaskListSQLQuery,
-			struct {
-				tasksListsRow
-				OldRangeID int64 `db:"old_range_id"`
-			}{
+			&updateTaskListsRow{
 				tasksListsRow{
 					request.TaskListInfo.DomainID,
 					request.TaskListInfo.RangeID,

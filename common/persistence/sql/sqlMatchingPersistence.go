@@ -110,6 +110,11 @@ type (
 		StartVersion    *int64 `db:"start_version"`
 	}
 
+	transferTasksRow struct {
+		persistence.TransferTaskInfo
+		ShardID int `db:"shard_id"`
+	}
+
 	replicationTasksRow struct {
 		DomainID            string `db:"domain_id"`
 		WorkflowID          string `db:"workflow_id"`
@@ -121,6 +126,16 @@ type (
 		Version             int64 `db:"version"`
 		LastReplicationInfo []byte `db:"last_replication_info"`
 		ShardID int `db:"shard_id"`
+	}
+
+	timerTasksRow struct{
+		persistence.TimerTaskInfo
+		ShardID int `db:"shard_id"`
+	}
+
+	updateExecutionRow struct {
+		executionRow
+		Condition int64 `db:"old_next_event_id"`
 	}
 )
 
@@ -646,10 +661,7 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
-	args := struct {
-		executionRow
-		Condition int64 `db:"old_next_event_id"`
-	}{
+	args := updateExecutionRow{
 		executionRow{
 			DomainID:                   request.ExecutionInfo.DomainID,
 			WorkflowID:                 request.ExecutionInfo.WorkflowID,
@@ -709,7 +721,7 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		args.CancelRequestID = &request.ExecutionInfo.CancelRequestID
 	}
 
-	result, err := tx.NamedExec(updateExecutionSQLQuery, args)
+	result, err := tx.NamedExec(updateExecutionSQLQuery, &args)
 	if err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to update executions row. Erorr: %v", err),
@@ -781,7 +793,7 @@ func (m *sqlMatchingManager) GetTransferTasks(request *persistence.GetTransferTa
 }
 
 func (m *sqlMatchingManager) CompleteTransferTask(request *persistence.CompleteTransferTaskRequest) error {
-	if _, err := m.db.NamedExec(completeTransferTaskSQLQuery, struct {
+	if _, err := m.db.NamedExec(completeTransferTaskSQLQuery, &struct {
 		ShardID int   `db:"shard_id"`
 		TaskID  int64 `db:"task_id"`
 	}{m.shardID, request.TaskID}); err != nil {
@@ -887,7 +899,7 @@ func getCurrentExecutionIfExists(tx *sqlx.Tx, shardID int, domainID string, work
 
 func createExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRequest, shardID int) error {
 	nowTimestamp := time.Now()
-	_, err := tx.NamedExec(createExecutionWithNoParentSQLQuery, executionRow{
+	_, err := tx.NamedExec(createExecutionWithNoParentSQLQuery, &executionRow{
 		ShardID:                    shardID,
 		DomainID:                   request.DomainID,
 		WorkflowID:                 *request.Execution.WorkflowId,
@@ -938,104 +950,11 @@ func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExec
 		arg.StartVersion = &request.ReplicationState.StartVersion
 	}
 
-	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, arg); err != nil {
+	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, &arg); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into current_executions table. Error: %v", err),
 		}
 	}
-	return nil
-}
-
-func (m *sqlMatchingManager) createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {
-	transferTaskRows := make([]struct {
-		persistence.TransferTaskInfo
-		ShardID int `db:"shard_id"`
-	}, len(transferTasks))
-
-	for i, task := range transferTasks {
-		transferTaskRows[i].ShardID = shardID
-		transferTaskRows[i].DomainID = domainID
-		transferTaskRows[i].WorkflowID = workflowID
-		transferTaskRows[i].RunID = runID
-		transferTaskRows[i].TargetDomainID = domainID
-		transferTaskRows[i].TargetWorkflowID = persistence.TransferTaskTransferTargetWorkflowID
-		transferTaskRows[i].TargetChildWorkflowOnly = false
-		transferTaskRows[i].TaskList = ""
-		transferTaskRows[i].ScheduleID = 0
-
-		switch task.GetType() {
-		case persistence.TransferTaskTypeActivityTask:
-			transferTaskRows[i].TargetDomainID = task.(*persistence.ActivityTask).DomainID
-			transferTaskRows[i].TaskList = task.(*persistence.ActivityTask).TaskList
-			transferTaskRows[i].ScheduleID = task.(*persistence.ActivityTask).ScheduleID
-
-		case persistence.TransferTaskTypeDecisionTask:
-			transferTaskRows[i].TargetDomainID = task.(*persistence.DecisionTask).DomainID
-			transferTaskRows[i].TaskList = task.(*persistence.DecisionTask).TaskList
-			transferTaskRows[i].ScheduleID = task.(*persistence.DecisionTask).ScheduleID
-
-		case persistence.TransferTaskTypeCancelExecution:
-			transferTaskRows[i].TargetDomainID = task.(*persistence.CancelExecutionTask).TargetDomainID
-			transferTaskRows[i].TargetWorkflowID = task.(*persistence.CancelExecutionTask).TargetWorkflowID
-			if task.(*persistence.CancelExecutionTask).TargetRunID != "" {
-				transferTaskRows[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
-			}
-			transferTaskRows[i].TargetChildWorkflowOnly = task.(*persistence.CancelExecutionTask).TargetChildWorkflowOnly
-			transferTaskRows[i].ScheduleID = task.(*persistence.CancelExecutionTask).InitiatedID
-
-		case persistence.TransferTaskTypeSignalExecution:
-			transferTaskRows[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
-			transferTaskRows[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
-			if task.(*persistence.SignalExecutionTask).TargetRunID != "" {
-				transferTaskRows[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
-			}
-			transferTaskRows[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
-			transferTaskRows[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
-
-		case persistence.TransferTaskTypeStartChildExecution:
-			transferTaskRows[i].TargetDomainID = task.(*persistence.StartChildExecutionTask).TargetDomainID
-			transferTaskRows[i].TargetWorkflowID = task.(*persistence.StartChildExecutionTask).TargetWorkflowID
-			transferTaskRows[i].ScheduleID = task.(*persistence.StartChildExecutionTask).InitiatedID
-
-		case persistence.TransferTaskTypeCloseExecution:
-			// No explicit property needs to be set
-
-		default:
-			m.logger.Fatal("Unknown Transfer Task.")
-		}
-
-		transferTaskRows[i].TaskID = task.GetTaskID()
-		transferTaskRows[i].TaskType = task.GetType()
-		transferTaskRows[i].Version = task.GetVersion()
-	}
-
-	query, args, err := m.db.BindNamed(createTransferTasksSQLQuery, transferTaskRows)
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to create transfer tasks. Failed to bind query. Error: %v", err),
-		}
-	}
-
-	result, err := tx.Exec(query, args...)
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to create transfer tasks. Error: %v", err),
-		}
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to create transfer tasks. Could not verify number of rows inserted.Error: %v", err),
-		}
-	}
-
-	if int(rowsAffected) != len(transferTasks) {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to create transfer tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(transferTasks), err),
-		}
-	}
-
 	return nil
 }
 
@@ -1056,10 +975,7 @@ func lockAndCheckNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, run
 
 func createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {
 	if len(transferTasks) > 0 {
-		structs := make([]struct {
-			persistence.TransferTaskInfo
-			ShardID int `db:"shard_id"`
-		}, len(transferTasks))
+		structs := make([]transferTasksRow, len(transferTasks))
 
 		for i, task := range transferTasks {
 			structs[i].ShardID = shardID
@@ -1227,10 +1143,7 @@ func createReplicationTasks(tx *sqlx.Tx, replicationTasks []persistence.Task, sh
 
 func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTask persistence.Task, shardID int, domainID, workflowID, runID string) error {
 	if len(timerTasks) > 0 {
-		structs := make([]struct{
-			persistence.TimerTaskInfo
-			ShardID int `db:"shard_id"`
-		}, len(timerTasks))
+		structs := make([]timerTasksRow, len(timerTasks))
 
 		for i, task := range timerTasks {
 			switch t := task.(type) {

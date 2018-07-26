@@ -141,7 +141,7 @@ func (m *sqlShardManager) CreateShard(request *persistence.CreateShardRequest) e
 		}
 	}
 
-	if _, err := m.db.NamedExec(createShardSQLQuery, row); err != nil {
+	if _, err := m.db.NamedExec(createShardSQLQuery, &row); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateShard operation failed. Failed to insert into shards table. Error: %v", err),
 		}
@@ -200,7 +200,7 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 		}
 	}
 
-	result, err := m.db.NamedExec(updateShardSQLQuery, struct {
+	result, err := m.db.NamedExec(updateShardSQLQuery, &struct {
 		shardsRow
 		OldRangeID int64 `db:"old_range_id"`
 	}{*row, request.PreviousRangeID})
