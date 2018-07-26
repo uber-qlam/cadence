@@ -75,8 +75,7 @@ expiry_ts = :expiry_ts
 WHERE
 domain_id = :domain_id AND
 name = :name AND
-type = :type AND
-range_id = :old_range_id -- TODO is this condition necessary if we are always going ot lock first????
+type = :type
 `
 
 	getTaskListSQLQuery = `SELECT domain_id, range_id, name, type, ack_level, kind, expiry_ts FROM task_lists WHERE
@@ -93,6 +92,7 @@ VALUES
 domain_id = ? AND
 name = ? AND
 type = ?
+FOR UPDATE
 `
 )
 
@@ -124,7 +124,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 			if _, err := m.db.NamedExec(createTaskListSQLQuery,
 				tasksListsRow{
 					request.DomainID,
-					rangeID+1,
+					rangeID + 1,
 					request.TaskList,
 					int64(request.TaskType),
 					ackLevel,
@@ -161,7 +161,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 		}
 
 		if result, err := tx.NamedExec(updateTaskListSQLQuery,
-			struct{
+			struct {
 				tasksListsRow
 				OldRangeID int64 `db:"old_range_id"`
 			}{
@@ -212,7 +212,7 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 }
 
 func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListRequest) (*persistence.UpdateTaskListResponse, error) {
-	tx, err := m.db.Beginx();
+	tx, err := m.db.Beginx()
 	if err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateTaskList operation failed. Failed to begin transaction. Error: %v", err),
@@ -233,20 +233,20 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 
 	if result, err := tx.NamedExec(updateTaskListSQLQuery,
 		struct {
-		tasksListsRow
-		OldRangeID int64 `db:"old_range_id"`
-	}{
-		tasksListsRow{
-			request.TaskListInfo.DomainID,
+			tasksListsRow
+			OldRangeID int64 `db:"old_range_id"`
+		}{
+			tasksListsRow{
+				request.TaskListInfo.DomainID,
+				request.TaskListInfo.RangeID,
+				request.TaskListInfo.Name,
+				int64(request.TaskListInfo.TaskType),
+				request.TaskListInfo.AckLevel,
+				int64(request.TaskListInfo.Kind),
+				MaximumExpiryTs,
+			},
 			request.TaskListInfo.RangeID,
-			request.TaskListInfo.Name,
-			int64(request.TaskListInfo.TaskType),
-			request.TaskListInfo.AckLevel,
-			int64(request.TaskListInfo.Kind),
-			MaximumExpiryTs,
-		},
-		request.TaskListInfo.RangeID,
-	}); err != nil {
+		}); err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateTaskList operation failed. Failed to update task list. Error: %v", err),
 		}

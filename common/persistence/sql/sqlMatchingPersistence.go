@@ -247,8 +247,7 @@ WHERE
 shard_id = :shard_id AND
 domain_id = :domain_id AND
 workflow_id = :workflow_id AND
-run_id = :run_id AND
-next_event_id = :old_next_event_id -- TODO is this condition necessary if we are always going ot lock first????
+run_id = :run_id
 `
 
 	getExecutionSQLQuery = `SELECT ` +
