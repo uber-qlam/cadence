@@ -135,6 +135,10 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 					Message: fmt.Sprintf("LeaseTaskList operation failed. Failed to make task list %v of type %v. Error: %v", request.TaskList, request.TaskType, err),
 				}
 			}
+		} else {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("LeaseTaskList operation failed. Failed to check if task list existed. Error: %v", err),
+			}
 		}
 	} else {
 		// The task list exists.
