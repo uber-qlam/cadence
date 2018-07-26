@@ -123,13 +123,13 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 			// The task list does not exist. Create it.
 			if _, err := m.db.NamedExec(createTaskListSQLQuery,
 				tasksListsRow{
-					request.DomainID,
-					rangeID + 1,
-					request.TaskList,
-					int64(request.TaskType),
-					ackLevel,
-					int64(request.TaskListKind),
-					MaximumExpiryTs,
+					DomainID: request.DomainID,
+					RangeID: rangeID + 1,
+					Name: request.TaskList,
+					Type: int64(request.TaskType),
+					AckLevel: ackLevel,
+					Kind: int64(request.TaskListKind),
+					ExpiryTs: MaximumExpiryTs,
 				}); err != nil {
 				return nil, &workflow.InternalServiceError{
 					Message: fmt.Sprintf("LeaseTaskList operation failed. Failed to make task list %v of type %v. Error: %v", request.TaskList, request.TaskType, err),
@@ -170,13 +170,13 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 				OldRangeID int64 `db:"old_range_id"`
 			}{
 				tasksListsRow{
-					row.DomainID,
-					row.RangeID + 1,
-					row.Name,
-					row.Type,
-					row.AckLevel,
-					row.Kind,
-					row.ExpiryTs,
+					DomainID:row.DomainID,
+					RangeID: row.RangeID + 1,
+					Name: row.Name,
+					Type: row.Type,
+					AckLevel: row.AckLevel,
+					Kind: row.Kind,
+					ExpiryTs: row.ExpiryTs,
 				},
 				row.RangeID,
 			}); err != nil {
@@ -206,12 +206,12 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 	}
 
 	return &persistence.LeaseTaskListResponse{&persistence.TaskListInfo{
-		request.DomainID,
-		request.TaskList,
-		request.TaskType,
-		rangeID + 1,
-		ackLevel,
-		request.TaskListKind,
+		DomainID: request.DomainID,
+		Name: request.TaskList,
+		TaskType: request.TaskType,
+		RangeID: rangeID + 1,
+		AckLevel: ackLevel,
+		Kind: request.TaskListKind,
 	}}, nil
 }
 
@@ -241,13 +241,13 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 			OldRangeID int64 `db:"old_range_id"`
 		}{
 			tasksListsRow{
-				request.TaskListInfo.DomainID,
-				request.TaskListInfo.RangeID,
-				request.TaskListInfo.Name,
-				int64(request.TaskListInfo.TaskType),
-				request.TaskListInfo.AckLevel,
-				int64(request.TaskListInfo.Kind),
-				MaximumExpiryTs,
+				DomainID: request.TaskListInfo.DomainID,
+				RangeID: request.TaskListInfo.RangeID,
+				Name: request.TaskListInfo.Name,
+				Type: int64(request.TaskListInfo.TaskType),
+				AckLevel: request.TaskListInfo.AckLevel,
+				Kind: int64(request.TaskListInfo.Kind),
+				ExpiryTs: MaximumExpiryTs,
 			},
 			request.TaskListInfo.RangeID,
 		}); err != nil {
