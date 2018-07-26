@@ -282,9 +282,9 @@ func (m *sqlTaskManager) CreateTasks(request *persistence.CreateTasksRequest) (*
 	}
 	defer tx.Rollback()
 
-	structs := make([]tasksRow, len(request.Tasks))
+	tasksRows := make([]tasksRow, len(request.Tasks))
 	for i, v := range request.Tasks {
-		structs[i] = tasksRow{
+		tasksRows[i] = tasksRow{
 			DomainID:     v.Data.DomainID,
 			WorkflowID:   v.Data.WorkflowID,
 			RunID:        v.Data.RunID,
@@ -296,7 +296,7 @@ func (m *sqlTaskManager) CreateTasks(request *persistence.CreateTasksRequest) (*
 		}
 	}
 
-	query, args, err := m.db.BindNamed(createTaskSQLQuery, structs)
+	query, args, err := m.db.BindNamed(createTaskSQLQuery, tasksRows)
 	if err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateTasks operation failed. Failed to bind statement. Error: %v", err),

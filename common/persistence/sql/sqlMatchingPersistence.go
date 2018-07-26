@@ -408,8 +408,8 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 }
 
 func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkflowExecutionRequest) (*persistence.GetWorkflowExecutionResponse, error) {
-	var result executionRow
-	if err := m.db.Get(&result, getExecutionSQLQuery,
+	var execution executionRow
+	if err := m.db.Get(&execution, getExecutionSQLQuery,
 		m.shardID,
 		request.DomainID,
 		*request.Execution.WorkflowId,
@@ -428,58 +428,58 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 
 	var state persistence.WorkflowMutableState
 	state.ExecutionInfo = &persistence.WorkflowExecutionInfo{
-		DomainID:                     result.DomainID,
-		WorkflowID:                   result.WorkflowID,
-		RunID:                        result.RunID,
-		TaskList:                     result.TaskList,
-		WorkflowTypeName:             result.WorkflowTypeName,
-		WorkflowTimeout:              int32(result.WorkflowTimeoutSeconds),
-		DecisionTimeoutValue:         int32(result.DecisionTaskTimeoutMinutes),
-		State:                        int(result.State),
-		CloseStatus:                  int(result.CloseStatus),
-		LastFirstEventID:             result.LastFirstEventID,
-		NextEventID:                  result.NextEventID,
-		LastProcessedEvent:           result.LastProcessedEvent,
-		StartTimestamp:               result.StartTime,
-		LastUpdatedTimestamp:         result.LastUpdatedTime,
-		CreateRequestID:              result.CreateRequestID,
-		DecisionVersion:              result.DecisionVersion,
-		DecisionScheduleID:           result.DecisionScheduleID,
-		DecisionStartedID:            result.DecisionStartedID,
-		DecisionRequestID:            result.DecisionRequestID,
-		DecisionTimeout:              int32(result.DecisionTimeout),
-		DecisionAttempt:              result.DecisionAttempt,
-		DecisionTimestamp:            result.DecisionTimestamp,
-		StickyTaskList:               result.StickyTaskList,
-		StickyScheduleToStartTimeout: int32(result.StickyScheduleToStartTimeout),
-		ClientLibraryVersion:         result.ClientLibraryVersion,
-		ClientFeatureVersion:         result.ClientFeatureVersion,
-		ClientImpl:                   result.ClientImpl,
+		DomainID:                     execution.DomainID,
+		WorkflowID:                   execution.WorkflowID,
+		RunID:                        execution.RunID,
+		TaskList:                     execution.TaskList,
+		WorkflowTypeName:             execution.WorkflowTypeName,
+		WorkflowTimeout:              int32(execution.WorkflowTimeoutSeconds),
+		DecisionTimeoutValue:         int32(execution.DecisionTaskTimeoutMinutes),
+		State:                        int(execution.State),
+		CloseStatus:                  int(execution.CloseStatus),
+		LastFirstEventID:             execution.LastFirstEventID,
+		NextEventID:                  execution.NextEventID,
+		LastProcessedEvent:           execution.LastProcessedEvent,
+		StartTimestamp:               execution.StartTime,
+		LastUpdatedTimestamp:         execution.LastUpdatedTime,
+		CreateRequestID:              execution.CreateRequestID,
+		DecisionVersion:              execution.DecisionVersion,
+		DecisionScheduleID:           execution.DecisionScheduleID,
+		DecisionStartedID:            execution.DecisionStartedID,
+		DecisionRequestID:            execution.DecisionRequestID,
+		DecisionTimeout:              int32(execution.DecisionTimeout),
+		DecisionAttempt:              execution.DecisionAttempt,
+		DecisionTimestamp:            execution.DecisionTimestamp,
+		StickyTaskList:               execution.StickyTaskList,
+		StickyScheduleToStartTimeout: int32(execution.StickyScheduleToStartTimeout),
+		ClientLibraryVersion:         execution.ClientLibraryVersion,
+		ClientFeatureVersion:         execution.ClientFeatureVersion,
+		ClientImpl:                   execution.ClientImpl,
 	}
 
-	if result.ExecutionContext != nil {
-		state.ExecutionInfo.ExecutionContext = *result.ExecutionContext
+	if execution.ExecutionContext != nil {
+		state.ExecutionInfo.ExecutionContext = *execution.ExecutionContext
 	}
 
-	if result.StartVersion != nil {
+	if execution.StartVersion != nil {
 		state.ReplicationState = &persistence.ReplicationState{
-			StartVersion: *result.StartVersion,
+			StartVersion: *execution.StartVersion,
 		}
 	}
 
-	if result.ParentDomainID != nil {
-		state.ExecutionInfo.ParentDomainID = *result.ParentDomainID
-		state.ExecutionInfo.ParentWorkflowID = *result.ParentWorkflowID
-		state.ExecutionInfo.ParentRunID = *result.ParentRunID
-		state.ExecutionInfo.InitiatedID = *result.InitiatedID
+	if execution.ParentDomainID != nil {
+		state.ExecutionInfo.ParentDomainID = *execution.ParentDomainID
+		state.ExecutionInfo.ParentWorkflowID = *execution.ParentWorkflowID
+		state.ExecutionInfo.ParentRunID = *execution.ParentRunID
+		state.ExecutionInfo.InitiatedID = *execution.InitiatedID
 		if state.ExecutionInfo.CompletionEvent != nil {
-			state.ExecutionInfo.CompletionEvent = *result.CompletionEvent
+			state.ExecutionInfo.CompletionEvent = *execution.CompletionEvent
 		}
 	}
 
-	if result.CancelRequested != nil && (*result.CancelRequested != 0) {
+	if execution.CancelRequested != nil && (*execution.CancelRequested != 0) {
 		state.ExecutionInfo.CancelRequested = true
-		state.ExecutionInfo.CancelRequestID = *result.CancelRequestID
+		state.ExecutionInfo.CancelRequestID = *execution.CancelRequestID
 	}
 
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
@@ -706,22 +706,6 @@ func NewSqlMatchingPersistence(username, password, host, port, dbName string) (p
 	}, nil
 }
 
-func getExecutionsRowIfExists(tx *sqlx.Tx, shardID int, domainID string, workflowID string, runID string) (*executionRow, error) {
-	var result executionRow
-	if err := tx.Get(&result,
-		getExecutionSQLQuery,
-		shardID,
-		domainID,
-		workflowID,
-		runID); err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to get executions row for (shard,domain,workflow,run) = (%v, %v, %v, %v). Error: %v", shardID, domainID, workflowID, runID, err),
-		}
-	}
-
-	return &result, nil
-}
-
 func getCurrentExecutionIfExists(tx *sqlx.Tx, shardID int, domainID string, workflowID string) (*currentExecutionRow, error) {
 	var row currentExecutionRow
 	if err := tx.Get(&row, getCurrentExecutionSQLQuery, shardID, domainID, workflowID); err != nil {
@@ -794,55 +778,55 @@ func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExec
 }
 
 func (m *sqlMatchingManager) createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {
-	structs := make([]struct {
+	transferTaskRows := make([]struct {
 		persistence.TransferTaskInfo
 		ShardID int `db:"shard_id"`
 	}, len(transferTasks))
 
 	for i, task := range transferTasks {
-		structs[i].ShardID = shardID
-		structs[i].DomainID = domainID
-		structs[i].WorkflowID = workflowID
-		structs[i].RunID = runID
-		structs[i].TargetDomainID = domainID
-		structs[i].TargetWorkflowID = persistence.TransferTaskTransferTargetWorkflowID
-		structs[i].TargetChildWorkflowOnly = false
-		structs[i].TaskList = ""
-		structs[i].ScheduleID = 0
+		transferTaskRows[i].ShardID = shardID
+		transferTaskRows[i].DomainID = domainID
+		transferTaskRows[i].WorkflowID = workflowID
+		transferTaskRows[i].RunID = runID
+		transferTaskRows[i].TargetDomainID = domainID
+		transferTaskRows[i].TargetWorkflowID = persistence.TransferTaskTransferTargetWorkflowID
+		transferTaskRows[i].TargetChildWorkflowOnly = false
+		transferTaskRows[i].TaskList = ""
+		transferTaskRows[i].ScheduleID = 0
 
 		switch task.GetType() {
 		case persistence.TransferTaskTypeActivityTask:
-			structs[i].TargetDomainID = task.(*persistence.ActivityTask).DomainID
-			structs[i].TaskList = task.(*persistence.ActivityTask).TaskList
-			structs[i].ScheduleID = task.(*persistence.ActivityTask).ScheduleID
+			transferTaskRows[i].TargetDomainID = task.(*persistence.ActivityTask).DomainID
+			transferTaskRows[i].TaskList = task.(*persistence.ActivityTask).TaskList
+			transferTaskRows[i].ScheduleID = task.(*persistence.ActivityTask).ScheduleID
 
 		case persistence.TransferTaskTypeDecisionTask:
-			structs[i].TargetDomainID = task.(*persistence.DecisionTask).DomainID
-			structs[i].TaskList = task.(*persistence.DecisionTask).TaskList
-			structs[i].ScheduleID = task.(*persistence.DecisionTask).ScheduleID
+			transferTaskRows[i].TargetDomainID = task.(*persistence.DecisionTask).DomainID
+			transferTaskRows[i].TaskList = task.(*persistence.DecisionTask).TaskList
+			transferTaskRows[i].ScheduleID = task.(*persistence.DecisionTask).ScheduleID
 
 		case persistence.TransferTaskTypeCancelExecution:
-			structs[i].TargetDomainID = task.(*persistence.CancelExecutionTask).TargetDomainID
-			structs[i].TargetWorkflowID = task.(*persistence.CancelExecutionTask).TargetWorkflowID
+			transferTaskRows[i].TargetDomainID = task.(*persistence.CancelExecutionTask).TargetDomainID
+			transferTaskRows[i].TargetWorkflowID = task.(*persistence.CancelExecutionTask).TargetWorkflowID
 			if task.(*persistence.CancelExecutionTask).TargetRunID != "" {
-				structs[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
+				transferTaskRows[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
 			}
-			structs[i].TargetChildWorkflowOnly = task.(*persistence.CancelExecutionTask).TargetChildWorkflowOnly
-			structs[i].ScheduleID = task.(*persistence.CancelExecutionTask).InitiatedID
+			transferTaskRows[i].TargetChildWorkflowOnly = task.(*persistence.CancelExecutionTask).TargetChildWorkflowOnly
+			transferTaskRows[i].ScheduleID = task.(*persistence.CancelExecutionTask).InitiatedID
 
 		case persistence.TransferTaskTypeSignalExecution:
-			structs[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
-			structs[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
+			transferTaskRows[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
+			transferTaskRows[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
 			if task.(*persistence.SignalExecutionTask).TargetRunID != "" {
-				structs[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
+				transferTaskRows[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
 			}
-			structs[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
-			structs[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
+			transferTaskRows[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
+			transferTaskRows[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
 
 		case persistence.TransferTaskTypeStartChildExecution:
-			structs[i].TargetDomainID = task.(*persistence.StartChildExecutionTask).TargetDomainID
-			structs[i].TargetWorkflowID = task.(*persistence.StartChildExecutionTask).TargetWorkflowID
-			structs[i].ScheduleID = task.(*persistence.StartChildExecutionTask).InitiatedID
+			transferTaskRows[i].TargetDomainID = task.(*persistence.StartChildExecutionTask).TargetDomainID
+			transferTaskRows[i].TargetWorkflowID = task.(*persistence.StartChildExecutionTask).TargetWorkflowID
+			transferTaskRows[i].ScheduleID = task.(*persistence.StartChildExecutionTask).InitiatedID
 
 		case persistence.TransferTaskTypeCloseExecution:
 			// No explicit property needs to be set
@@ -852,12 +836,12 @@ func (m *sqlMatchingManager) createTransferTasks(tx *sqlx.Tx, transferTasks []pe
 			//d.logger.Fatal("Unknown Transfer Task.")
 		}
 
-		structs[i].TaskID = task.GetTaskID()
-		structs[i].TaskType = task.GetType()
-		structs[i].Version = task.GetVersion()
+		transferTaskRows[i].TaskID = task.GetTaskID()
+		transferTaskRows[i].TaskType = task.GetType()
+		transferTaskRows[i].Version = task.GetVersion()
 	}
 
-	query, args, err := m.db.BindNamed(createTransferTasksSQLQuery, structs)
+	query, args, err := m.db.BindNamed(createTransferTasksSQLQuery, transferTaskRows)
 	if err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("Failed to create transfer tasks. Failed to bind query. Error: %v", err),
