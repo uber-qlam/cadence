@@ -92,7 +92,6 @@ domain_id = ? AND
 name = ? AND 
 type = ?`
 
-
 	lockTaskListSQLQuery = `SELECT range_id FROM task_lists WHERE
 domain_id = ? AND
 name = ? AND
@@ -115,7 +114,6 @@ task_id <= ?
 (domain_id, workflow_id, run_id, schedule_id, task_list_name, task_list_type, task_id, expiry_ts)
 VALUES
 (:domain_id, :workflow_id, :run_id, :schedule_id, :task_list_name, :task_list_type, :task_id, :expiry_ts)`
-
 )
 
 func NewTaskPersistence(username, password, host, port, dbName string) (persistence.TaskManager, error) {
@@ -146,11 +144,11 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 			if _, err := m.db.NamedExec(createTaskListSQLQuery,
 				&tasksListsRow{
 					DomainID: request.DomainID,
-					RangeID: rangeID + 1,
-					Name: request.TaskList,
-					Type: int64(request.TaskType),
+					RangeID:  rangeID + 1,
+					Name:     request.TaskList,
+					Type:     int64(request.TaskType),
 					AckLevel: ackLevel,
-					Kind: int64(request.TaskListKind),
+					Kind:     int64(request.TaskListKind),
 					ExpiryTs: MaximumExpiryTs,
 				}); err != nil {
 				return nil, &workflow.InternalServiceError{
@@ -192,12 +190,12 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 		if result, err := tx.NamedExec(updateTaskListSQLQuery,
 			&updateTaskListsRow{
 				tasksListsRow{
-					DomainID:row.DomainID,
-					RangeID: row.RangeID + 1,
-					Name: row.Name,
-					Type: row.Type,
+					DomainID: row.DomainID,
+					RangeID:  row.RangeID + 1,
+					Name:     row.Name,
+					Type:     row.Type,
 					AckLevel: row.AckLevel,
-					Kind: row.Kind,
+					Kind:     row.Kind,
 					ExpiryTs: row.ExpiryTs,
 				},
 				row.RangeID,
@@ -229,11 +227,11 @@ func (m *sqlTaskManager) LeaseTaskList(request *persistence.LeaseTaskListRequest
 
 	return &persistence.LeaseTaskListResponse{&persistence.TaskListInfo{
 		DomainID: request.DomainID,
-		Name: request.TaskList,
+		Name:     request.TaskList,
 		TaskType: request.TaskType,
-		RangeID: rangeID + 1,
+		RangeID:  rangeID + 1,
 		AckLevel: ackLevel,
-		Kind: request.TaskListKind,
+		Kind:     request.TaskListKind,
 	}}, nil
 }
 
@@ -241,13 +239,13 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 	if request.TaskListInfo.Kind == persistence.TaskListKindSticky {
 		// If sticky, update with TTL
 		if _, err := m.db.NamedExec(updateTaskListWithTTLSQLQuery, &tasksListsRow{
-				DomainID: request.TaskListInfo.DomainID,
-				RangeID: request.TaskListInfo.RangeID,
-				Name: request.TaskListInfo.Name,
-				Type: int64(request.TaskListInfo.TaskType),
-				AckLevel: request.TaskListInfo.AckLevel,
-				Kind: int64(request.TaskListInfo.Kind),
-				ExpiryTs: stickyTaskListTTL(),
+			DomainID: request.TaskListInfo.DomainID,
+			RangeID:  request.TaskListInfo.RangeID,
+			Name:     request.TaskListInfo.Name,
+			Type:     int64(request.TaskListInfo.TaskType),
+			AckLevel: request.TaskListInfo.AckLevel,
+			Kind:     int64(request.TaskListInfo.Kind),
+			ExpiryTs: stickyTaskListTTL(),
 		}); err != nil {
 			return nil, &workflow.InternalServiceError{
 				Message: fmt.Sprintf("UpdateTaskList operation failed. Failed to make sticky task list. Error: %v", err),
@@ -307,7 +305,6 @@ func (m *sqlTaskManager) UpdateTaskList(request *persistence.UpdateTaskListReque
 			}
 		}
 	}
-
 
 	return &persistence.UpdateTaskListResponse{}, nil
 }
@@ -372,8 +369,7 @@ func (m *sqlTaskManager) CreateTasks(request *persistence.CreateTasksRequest) (*
 
 func (m *sqlTaskManager) GetTasks(request *persistence.GetTasksRequest) (*persistence.GetTasksResponse, error) {
 	var rows []tasksRow
-	if err := m.db.Select(&rows, getTaskSQLQuery, request.DomainID, request.TaskList, request.TaskType, request.ReadLevel, request.MaxReadLevel);
-		err != nil {
+	if err := m.db.Select(&rows, getTaskSQLQuery, request.DomainID, request.TaskList, request.TaskType, request.ReadLevel, request.MaxReadLevel); err != nil {
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("GetTasks operation failed. Failed to get rows. Error: %v", err),
 		}
@@ -382,12 +378,12 @@ func (m *sqlTaskManager) GetTasks(request *persistence.GetTasksRequest) (*persis
 	var tasks = make([]*persistence.TaskInfo, len(rows))
 	for i, v := range rows {
 		tasks[i] = &persistence.TaskInfo{
-			v.DomainID,
-			v.WorkflowID,
-			v.RunID,
-			v.TaskID,
-			v.ScheduleID,
-			0,
+			DomainID:v.DomainID,
+			WorkflowID: v.WorkflowID,
+			RunID: v.RunID,
+			TaskID: v.TaskID,
+			ScheduleID: v.ScheduleID,
+			ScheduleToStartTimeout: 0,
 		}
 	}
 

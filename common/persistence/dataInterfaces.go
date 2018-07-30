@@ -237,16 +237,16 @@ type (
 
 	// TimerTaskInfo describes a timer task.
 	TimerTaskInfo struct {
-		DomainID            string `db:"domain_id"`
-		WorkflowID          string `db:"workflow_id"`
-		RunID               string `db:"run_id"`
+		DomainID            string    `db:"domain_id"`
+		WorkflowID          string    `db:"workflow_id"`
+		RunID               string    `db:"run_id"`
 		VisibilityTimestamp time.Time `db:"visibility_ts"`
-		TaskID              int64 `db:"task_id"`
-		TaskType            int `db:"type"`
-		TimeoutType         int `db:"timeout_type"`
-		EventID             int64 `db:"event_id"`
-		ScheduleAttempt     int64 `db:"schedule_attempt"`
-		Version             int64 `db:"version"`
+		TaskID              int64     `db:"task_id"`
+		TaskType            int       `db:"type"`
+		TimeoutType         int       `db:"timeout_type"`
+		EventID             int64     `db:"event_id"`
+		ScheduleAttempt     int64     `db:"schedule_attempt"`
+		Version             int64     `db:"version"`
 	}
 
 	// TaskListInfo describes a state of a task list implementation.
@@ -1499,25 +1499,56 @@ func (config *ClusterReplicationConfig) deserialize(input map[string]interface{}
 }
 
 // GetVisibilityTSFrom - helper method to get visibility timestamp
-func GetVisibilityTSFrom(task Task) time.Time {
+func GetVisibilityTSFrom(task Task) (time.Time, error) {
 	switch task.GetType() {
 	case TaskTypeDecisionTimeout:
-		return task.(*DecisionTimeoutTask).VisibilityTimestamp
+		if t, ok := task.(*DecisionTimeoutTask); ok {
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to DecisionTimeoutTask", task),
+		}
 
 	case TaskTypeActivityTimeout:
-		return task.(*ActivityTimeoutTask).VisibilityTimestamp
+		if t, ok := task.(*ActivityTimeoutTask); ok {
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to ActivityTimeoutTask", task),
+		}
 
 	case TaskTypeUserTimer:
-		return task.(*UserTimerTask).VisibilityTimestamp
+		if t, ok := task.(*UserTimerTask); ok {
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to UserTimeoutTask", task),
+		}
 
 	case TaskTypeWorkflowTimeout:
-		return task.(*WorkflowTimeoutTask).VisibilityTimestamp
+		if t, ok := task.(*WorkflowTimeoutTask); ok {
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to WorkflowTimeoutTask", task),
+		}
 
 	case TaskTypeDeleteHistoryEvent:
-		return task.(*DeleteHistoryEventTask).VisibilityTimestamp
+		if t, ok := task.(*DeleteHistoryEventTask); ok {
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to DeleteHistoryEventTask", task),
+		}
 
 	case TaskTypeRetryTimer:
-		return task.(*RetryTimerTask).VisibilityTimestamp
+		if t, ok := task.(*RetryTimerTask); ok{
+			return t.VisibilityTimestamp, nil
+		}
+		return time.Time{}, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to cast %v to RetryTimerTask", task),
+		}
 	}
-	return time.Time{}
+
+	return time.Time{}, nil
 }

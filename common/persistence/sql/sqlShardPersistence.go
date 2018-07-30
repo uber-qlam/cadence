@@ -49,6 +49,11 @@ type (
 		ClusterTimerAckLevel      []byte    `db:"cluster_timer_ack_level"`
 		DomainNotificationVersion int64     `db:"domain_notification_version"`
 	}
+
+	updateShardRequest struct {
+		shardsRow
+		OldRangeID int64 `db:"old_range_id"`
+	}
 )
 
 const (
@@ -200,10 +205,10 @@ func (m *sqlShardManager) UpdateShard(request *persistence.UpdateShardRequest) e
 		}
 	}
 
-	result, err := m.db.NamedExec(updateShardSQLQuery, &struct {
-		shardsRow
-		OldRangeID int64 `db:"old_range_id"`
-	}{*row, request.PreviousRangeID})
+	result, err := m.db.NamedExec(updateShardSQLQuery, &updateShardRequest{
+		*row,
+		request.PreviousRangeID,
+	})
 	if err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdatedShard operation failed. Failed to update shard with ID: %v. Error: %v", request.ShardInfo.ShardID, err),

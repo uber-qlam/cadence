@@ -139,7 +139,7 @@ CREATE TABLE task_lists (
 	PRIMARY KEY (domain_id, name, type)
 );
 
-CREATE TABLE IF NOT EXISTS replication_tasks (
+CREATE TABLE replication_tasks (
 	domain_id VARCHAR(64) NOT NULL,
 	workflow_id VARCHAR(255) NOT NULL,
 	run_id VARCHAR(64) NOT NULL,

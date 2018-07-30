@@ -2552,7 +2552,9 @@ func (d *cassandraPersistence) createTimerTasks(batch *gocql.Batch, timerTasks [
 			attempt = int64(t.Attempt)
 		}
 
-		ts := common.UnixNanoToCQLTimestamp(persistence.GetVisibilityTSFrom(task).UnixNano())
+		// Ignoring possible type cast errors.
+		t, _ := persistence.GetVisibilityTSFrom(task)
+		ts := common.UnixNanoToCQLTimestamp(t.UnixNano())
 
 		batch.Query(templateCreateTimerTaskQuery,
 			d.shardID,
@@ -2575,7 +2577,10 @@ func (d *cassandraPersistence) createTimerTasks(batch *gocql.Batch, timerTasks [
 	}
 
 	if deleteTimerTask != nil {
-		ts := common.UnixNanoToCQLTimestamp(persistence.GetVisibilityTSFrom(deleteTimerTask).UnixNano())
+		// Ignoring possible type cast errors.
+		t, _ := persistence.GetVisibilityTSFrom(deleteTimerTask)
+		ts := common.UnixNanoToCQLTimestamp(t.UnixNano())
+
 		batch.Query(templateCompleteTimerTaskQuery,
 			d.shardID,
 			rowTypeTimerTask,
@@ -3587,8 +3592,6 @@ func isThrottlingError(err error) bool {
 	}
 	return false
 }
-
-
 
 // SetVisibilityTSFrom - helper method to set visibility timestamp
 func SetVisibilityTSFrom(task persistence.Task, t time.Time) {

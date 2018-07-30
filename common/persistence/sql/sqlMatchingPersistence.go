@@ -29,15 +29,15 @@ import (
 	"github.com/uber/cadence/common/persistence"
 
 	"github.com/hmgle/sqlx"
-	"github.com/uber/cadence/common"
 	"github.com/uber-common/bark"
+	"github.com/uber/cadence/common"
 )
 
 type (
 	sqlMatchingManager struct {
 		db      *sqlx.DB
 		shardID int
-		logger             bark.Logger
+		logger  bark.Logger
 	}
 
 	FlatCreateWorkflowExecutionRequest struct {
@@ -119,16 +119,16 @@ type (
 		DomainID            string `db:"domain_id"`
 		WorkflowID          string `db:"workflow_id"`
 		RunID               string `db:"run_id"`
-		TaskID              int64 `db:"task_id"`
-		TaskType            int `db:"type"`
-		FirstEventID        int64 `db:"first_event_id"`
-		NextEventID         int64 `db:"next_event_id"`
-		Version             int64 `db:"version"`
+		TaskID              int64  `db:"task_id"`
+		TaskType            int    `db:"type"`
+		FirstEventID        int64  `db:"first_event_id"`
+		NextEventID         int64  `db:"next_event_id"`
+		Version             int64  `db:"version"`
 		LastReplicationInfo []byte `db:"last_replication_info"`
-		ShardID int `db:"shard_id"`
+		ShardID             int    `db:"shard_id"`
 	}
 
-	timerTasksRow struct{
+	timerTasksRow struct {
 		persistence.TimerTaskInfo
 		ShardID int `db:"shard_id"`
 	}
@@ -377,7 +377,7 @@ last_replication_info`
 :version,
 :last_replication_info`
 
-	replicationTasksColumns = `shard_id, ` + replicationTaskInfoColumns
+	replicationTasksColumns     = `shard_id, ` + replicationTaskInfoColumns
 	replicationTasksColumnsTags = `:shard_id, ` + replicationTaskInfoColumnsTags
 
 	createReplicationTasksSQLQuery = `INSERT INTO replication_tasks (` +
@@ -391,10 +391,10 @@ shard_id = ? AND
 task_id > ? AND
 task_id <= ?`
 
-	timerTaskInfoColumns = `domain_id, workflow_id, run_id, visibility_ts, task_id, type, timeout_type, event_id, schedule_attempt, version`
+	timerTaskInfoColumns     = `domain_id, workflow_id, run_id, visibility_ts, task_id, type, timeout_type, event_id, schedule_attempt, version`
 	timerTaskInfoColumnsTags = `:domain_id, :workflow_id, :run_id, :visibility_ts, :task_id, :type, :timeout_type, :event_id, :schedule_attempt, :version`
-	timerTasksColumns = `shard_id,` + timerTaskInfoColumns
-	timerTasksColumnsTags = `:shard_id,` + timerTaskInfoColumnsTags
+	timerTasksColumns        = `shard_id,` + timerTaskInfoColumns
+	timerTasksColumnsTags    = `:shard_id,` + timerTaskInfoColumnsTags
 	createTimerTasksSQLQuery = `INSERT INTO timer_tasks (` +
 		timerTasksColumns + `) VALUES (` +
 		timerTasksColumnsTags + `)`
@@ -405,7 +405,6 @@ shard_id = ? AND
 visibility_ts >= ? AND
 visibility_ts < ?`
 	completeTimerTaskSQLQuery = `DELETE FROM timer_tasks WHERE shard_id = ? AND visibility_ts = ? AND task_id = ?`
-
 
 	lockAndCheckNextEventIdSQLQuery = `SELECT next_event_id FROM executions WHERE
 shard_id = ? AND
@@ -632,7 +631,6 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
-
 	if err := lockShard(tx, m.shardID, request.RangeID); err != nil {
 		switch err.(type) {
 		case *persistence.ShardOwnershipLostError:
@@ -820,7 +818,7 @@ func (m *sqlMatchingManager) GetReplicationTasks(request *persistence.GetReplica
 	var tasks = make([]*persistence.ReplicationTaskInfo, len(rows))
 
 	for i, row := range rows {
-		var lastReplicationInfo map[string]persistence.ReplicationInfo
+		var lastReplicationInfo map[string]*persistence.ReplicationInfo
 		if err := gobDeserialize(row.LastReplicationInfo, &lastReplicationInfo); err != nil {
 			return nil, &workflow.InternalServiceError{
 				Message: fmt.Sprintf("GetReplicationTasks operation failed. Failed to deserialize LastReplicationInfo. Error: %v", err),
@@ -828,15 +826,15 @@ func (m *sqlMatchingManager) GetReplicationTasks(request *persistence.GetReplica
 		}
 
 		tasks[i] = &persistence.ReplicationTaskInfo{
-			row.DomainID,
-			row.WorkflowID,
-			row.RunID,
-			row.TaskID,
-			row.TaskType,
-			row.FirstEventID,
-			row.NextEventID,
-			row.Version,
-			lastReplicationInfoFromSerialized(lastReplicationInfo),
+			DomainID:            row.DomainID,
+			WorkflowID:          row.WorkflowID,
+			RunID:               row.RunID,
+			TaskID:              row.TaskID,
+			TaskType:            row.TaskType,
+			FirstEventID:        row.FirstEventID,
+			NextEventID:         row.NextEventID,
+			Version:             row.Version,
+			LastReplicationInfo: lastReplicationInfo,
 		}
 
 	}
@@ -882,7 +880,7 @@ func NewSqlMatchingPersistence(username, password, host, port, dbName string, lo
 	}
 
 	return &sqlMatchingManager{
-		db: db,
+		db:     db,
 		logger: logger,
 	}, nil
 }
@@ -974,167 +972,174 @@ func lockAndCheckNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, run
 }
 
 func createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {
-	if len(transferTasks) > 0 {
-		structs := make([]transferTasksRow, len(transferTasks))
+	if len(transferTasks) == 0 {
+		return nil
+	}
+	transferTasksRows := make([]transferTasksRow, len(transferTasks))
 
-		for i, task := range transferTasks {
-			structs[i].ShardID = shardID
-			structs[i].DomainID = domainID
-			structs[i].WorkflowID = workflowID
-			structs[i].RunID = runID
-			structs[i].TargetDomainID = domainID
-			structs[i].TargetWorkflowID = persistence.TransferTaskTransferTargetWorkflowID
-			structs[i].TargetChildWorkflowOnly = false
-			structs[i].TaskList = ""
-			structs[i].ScheduleID = 0
+	for i, task := range transferTasks {
+		transferTasksRows[i].ShardID = shardID
+		transferTasksRows[i].DomainID = domainID
+		transferTasksRows[i].WorkflowID = workflowID
+		transferTasksRows[i].RunID = runID
+		transferTasksRows[i].TargetDomainID = domainID
+		transferTasksRows[i].TargetWorkflowID = persistence.TransferTaskTransferTargetWorkflowID
+		transferTasksRows[i].TargetChildWorkflowOnly = false
+		transferTasksRows[i].TaskList = ""
+		transferTasksRows[i].ScheduleID = 0
 
-			switch task.GetType() {
-			case persistence.TransferTaskTypeActivityTask:
-				structs[i].TargetDomainID = task.(*persistence.ActivityTask).DomainID
-				structs[i].TaskList = task.(*persistence.ActivityTask).TaskList
-				structs[i].ScheduleID = task.(*persistence.ActivityTask).ScheduleID
+		switch task.GetType() {
+		case persistence.TransferTaskTypeActivityTask:
+			transferTasksRows[i].TargetDomainID = task.(*persistence.ActivityTask).DomainID
+			transferTasksRows[i].TaskList = task.(*persistence.ActivityTask).TaskList
+			transferTasksRows[i].ScheduleID = task.(*persistence.ActivityTask).ScheduleID
 
-			case persistence.TransferTaskTypeDecisionTask:
-				structs[i].TargetDomainID = task.(*persistence.DecisionTask).DomainID
-				structs[i].TaskList = task.(*persistence.DecisionTask).TaskList
-				structs[i].ScheduleID = task.(*persistence.DecisionTask).ScheduleID
+		case persistence.TransferTaskTypeDecisionTask:
+			transferTasksRows[i].TargetDomainID = task.(*persistence.DecisionTask).DomainID
+			transferTasksRows[i].TaskList = task.(*persistence.DecisionTask).TaskList
+			transferTasksRows[i].ScheduleID = task.(*persistence.DecisionTask).ScheduleID
 
-			case persistence.TransferTaskTypeCancelExecution:
-				structs[i].TargetDomainID = task.(*persistence.CancelExecutionTask).TargetDomainID
-				structs[i].TargetWorkflowID = task.(*persistence.CancelExecutionTask).TargetWorkflowID
-				if task.(*persistence.CancelExecutionTask).TargetRunID != "" {
-					structs[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
-				}
-				structs[i].TargetChildWorkflowOnly = task.(*persistence.CancelExecutionTask).TargetChildWorkflowOnly
-				structs[i].ScheduleID = task.(*persistence.CancelExecutionTask).InitiatedID
-
-			case persistence.TransferTaskTypeSignalExecution:
-				structs[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
-				structs[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
-				if task.(*persistence.SignalExecutionTask).TargetRunID != "" {
-					structs[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
-				}
-				structs[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
-				structs[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
-
-			case persistence.TransferTaskTypeStartChildExecution:
-				structs[i].TargetDomainID = task.(*persistence.StartChildExecutionTask).TargetDomainID
-				structs[i].TargetWorkflowID = task.(*persistence.StartChildExecutionTask).TargetWorkflowID
-				structs[i].ScheduleID = task.(*persistence.StartChildExecutionTask).InitiatedID
-
-			case persistence.TransferTaskTypeCloseExecution:
-				// No explicit property needs to be set
-
-			default:
-				// hmm what should i do here?
-				//d.logger.Fatal("Unknown Transfer Task.")
+		case persistence.TransferTaskTypeCancelExecution:
+			transferTasksRows[i].TargetDomainID = task.(*persistence.CancelExecutionTask).TargetDomainID
+			transferTasksRows[i].TargetWorkflowID = task.(*persistence.CancelExecutionTask).TargetWorkflowID
+			if task.(*persistence.CancelExecutionTask).TargetRunID != "" {
+				transferTasksRows[i].TargetRunID = task.(*persistence.CancelExecutionTask).TargetRunID
 			}
+			transferTasksRows[i].TargetChildWorkflowOnly = task.(*persistence.CancelExecutionTask).TargetChildWorkflowOnly
+			transferTasksRows[i].ScheduleID = task.(*persistence.CancelExecutionTask).InitiatedID
 
-			structs[i].TaskID = task.GetTaskID()
-			structs[i].TaskType = task.GetType()
-			structs[i].Version = task.GetVersion()
+		case persistence.TransferTaskTypeSignalExecution:
+			transferTasksRows[i].TargetDomainID = task.(*persistence.SignalExecutionTask).TargetDomainID
+			transferTasksRows[i].TargetWorkflowID = task.(*persistence.SignalExecutionTask).TargetWorkflowID
+			if task.(*persistence.SignalExecutionTask).TargetRunID != "" {
+				transferTasksRows[i].TargetRunID = task.(*persistence.SignalExecutionTask).TargetRunID
+			}
+			transferTasksRows[i].TargetChildWorkflowOnly = task.(*persistence.SignalExecutionTask).TargetChildWorkflowOnly
+			transferTasksRows[i].ScheduleID = task.(*persistence.SignalExecutionTask).InitiatedID
+
+		case persistence.TransferTaskTypeStartChildExecution:
+			transferTasksRows[i].TargetDomainID = task.(*persistence.StartChildExecutionTask).TargetDomainID
+			transferTasksRows[i].TargetWorkflowID = task.(*persistence.StartChildExecutionTask).TargetWorkflowID
+			transferTasksRows[i].ScheduleID = task.(*persistence.StartChildExecutionTask).InitiatedID
+
+		case persistence.TransferTaskTypeCloseExecution:
+			// No explicit property needs to be set
+
+		default:
+			// hmm what should i do here?
+			//d.logger.Fatal("Unknown Transfer Task.")
 		}
 
-		query, args, err := tx.BindNamed(createTransferTasksSQLQuery, structs)
-		if err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create transfer tasks. Failed to bind query. Error: %v", err),
-			}
-		}
-
-		result, err := tx.Exec(query, args...)
-		if err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create transfer tasks. Error: %v", err),
-			}
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create transfer tasks. Could not verify number of rows inserted. Error: %v", err),
-			}
-		}
-
-		if int(rowsAffected) != len(transferTasks) {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create transfer tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(transferTasks), err),
-			}
-		}
-
+		transferTasksRows[i].TaskID = task.GetTaskID()
+		transferTasksRows[i].TaskType = task.GetType()
+		transferTasksRows[i].Version = task.GetVersion()
 	}
 
+	query, args, err := tx.BindNamed(createTransferTasksSQLQuery, transferTasksRows)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create transfer tasks. Failed to bind query. Error: %v", err),
+		}
+	}
+
+	result, err := tx.Exec(query, args...)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create transfer tasks. Error: %v", err),
+		}
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create transfer tasks. Could not verify number of rows inserted. Error: %v", err),
+		}
+	}
+
+	if int(rowsAffected) != len(transferTasks) {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create transfer tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(transferTasks), err),
+		}
+	}
 
 	return nil
 }
 
 func createReplicationTasks(tx *sqlx.Tx, replicationTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {
-	if len(replicationTasks) > 0 {
-		structs := make([]replicationTasksRow, len(replicationTasks))
+	if len(replicationTasks) == 0 {
+		return nil
+	}
+	replicationTasksRows := make([]replicationTasksRow, len(replicationTasks))
 
-		for i, task := range replicationTasks {
-			structs[i].DomainID = domainID
-			structs[i].WorkflowID = workflowID
-			structs[i].RunID = runID
-			structs[i].ShardID = shardID
-			structs[i].TaskType = task.GetType()
-			structs[i].TaskID = task.GetTaskID()
+	for i, task := range replicationTasks {
+		replicationTasksRows[i].DomainID = domainID
+		replicationTasksRows[i].WorkflowID = workflowID
+		replicationTasksRows[i].RunID = runID
+		replicationTasksRows[i].ShardID = shardID
+		replicationTasksRows[i].TaskType = task.GetType()
+		replicationTasksRows[i].TaskID = task.GetTaskID()
 
-			firstEventID := common.EmptyEventID
-			nextEventID := common.EmptyEventID
-			version := int64(0)
-			var lastReplicationInfo []byte
-			var err error
+		firstEventID := common.EmptyEventID
+		nextEventID := common.EmptyEventID
+		version := int64(0)
+		var lastReplicationInfo []byte
+		var err error
 
-			switch task.GetType() {
-			case persistence.ReplicationTaskTypeHistory:
-				firstEventID = task.(*persistence.HistoryReplicationTask).FirstEventID
-				nextEventID = task.(*persistence.HistoryReplicationTask).NextEventID
-				version = task.GetVersion()
-				lastReplicationInfo, err = gobSerialize(prepareLastReplicationInfoForSerialization(task.(*persistence.HistoryReplicationTask).LastReplicationInfo))
-				if err != nil {
-					return &workflow.InternalServiceError{
-						Message: fmt.Sprintf("Failed to serialize LastReplicationInfo. Task: %v", task),
-					}
-				}
-
-			default:
+		switch task.GetType() {
+		case persistence.ReplicationTaskTypeHistory:
+			historyReplicationTask, ok := task.(*persistence.HistoryReplicationTask)
+			if !ok {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Unknown replication task: %v", task),
+					Message: fmt.Sprintf("Failed to cast %v to HistoryReplicationTask", task),
 				}
 			}
 
-			structs[i].FirstEventID = firstEventID
-			structs[i].NextEventID = nextEventID
-			structs[i].Version = version
-			structs[i].LastReplicationInfo = lastReplicationInfo
-		}
+			firstEventID = historyReplicationTask.FirstEventID
+			nextEventID = historyReplicationTask.NextEventID
+			version = task.GetVersion()
+			lastReplicationInfo, err = gobSerialize(historyReplicationTask.LastReplicationInfo)
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to serialize LastReplicationInfo. Task: %v", task),
+				}
+			}
 
-		query, args, err := tx.BindNamed(createReplicationTasksSQLQuery, structs)
-		if err != nil {
+		default:
 			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create replication tasks. Failed to bind query. Error: %v", err),
+				Message: fmt.Sprintf("Unknown replication task: %v", task),
 			}
 		}
 
-		result, err := tx.Exec(query, args...)
-		if err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create replication tasks. Error: %v", err),
-			}
-		}
+		replicationTasksRows[i].FirstEventID = firstEventID
+		replicationTasksRows[i].NextEventID = nextEventID
+		replicationTasksRows[i].Version = version
+		replicationTasksRows[i].LastReplicationInfo = lastReplicationInfo
+	}
 
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create replication tasks. Could not verify number of rows inserted. Error: %v", err),
-			}
+	query, args, err := tx.BindNamed(createReplicationTasksSQLQuery, replicationTasksRows)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create replication tasks. Failed to bind query. Error: %v", err),
 		}
+	}
 
-		if int(rowsAffected) != len(replicationTasks) {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to create replication tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(replicationTasks), err),
-			}
+	result, err := tx.Exec(query, args...)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create replication tasks. Error: %v", err),
+		}
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create replication tasks. Could not verify number of rows inserted. Error: %v", err),
+		}
+	}
+
+	if int(rowsAffected) != len(replicationTasks) {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to create replication tasks. Inserted %v instead of %v rows into transfer_tasks. Error: %v", rowsAffected, len(replicationTasks), err),
 		}
 	}
 
@@ -1143,38 +1148,43 @@ func createReplicationTasks(tx *sqlx.Tx, replicationTasks []persistence.Task, sh
 
 func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTask persistence.Task, shardID int, domainID, workflowID, runID string) error {
 	if len(timerTasks) > 0 {
-		structs := make([]timerTasksRow, len(timerTasks))
+		timerTasksRows := make([]timerTasksRow, len(timerTasks))
 
 		for i, task := range timerTasks {
 			switch t := task.(type) {
 			case *persistence.DecisionTimeoutTask:
-				structs[i].EventID = t.EventID
-				structs[i].TimeoutType = t.TimeoutType
-				structs[i].ScheduleAttempt = t.ScheduleAttempt
+				timerTasksRows[i].EventID = t.EventID
+				timerTasksRows[i].TimeoutType = t.TimeoutType
+				timerTasksRows[i].ScheduleAttempt = t.ScheduleAttempt
 			case *persistence.ActivityTimeoutTask:
-				structs[i].EventID = t.EventID
-				structs[i].TimeoutType = t.TimeoutType
-				structs[i].ScheduleAttempt = t.Attempt
+				timerTasksRows[i].EventID = t.EventID
+				timerTasksRows[i].TimeoutType = t.TimeoutType
+				timerTasksRows[i].ScheduleAttempt = t.Attempt
 			case *persistence.UserTimerTask:
-				structs[i].EventID = t.EventID
+				timerTasksRows[i].EventID = t.EventID
 			case *persistence.RetryTimerTask:
-				structs[i].EventID = t.EventID
-				structs[i].ScheduleAttempt = int64(t.Attempt)
+				timerTasksRows[i].EventID = t.EventID
+				timerTasksRows[i].ScheduleAttempt = int64(t.Attempt)
 			}
 
+			timerTasksRows[i].ShardID = shardID
+			timerTasksRows[i].DomainID = domainID
+			timerTasksRows[i].WorkflowID = workflowID
+			timerTasksRows[i].RunID = runID
 
-			structs[i].ShardID = shardID
-			structs[i].DomainID = domainID
-			structs[i].WorkflowID = workflowID
-			structs[i].RunID = runID
-
-			structs[i].VisibilityTimestamp = persistence.GetVisibilityTSFrom(task)
-			structs[i].TaskID = task.GetTaskID()
-			structs[i].Version = task.GetVersion()
-			structs[i].TaskType = task.GetType()
+			if t, err := persistence.GetVisibilityTSFrom(task); err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to create timer tasks. Error: %v", err),
+				}
+			} else {
+				timerTasksRows[i].VisibilityTimestamp = t
+			}
+			timerTasksRows[i].TaskID = task.GetTaskID()
+			timerTasksRows[i].Version = task.GetVersion()
+			timerTasksRows[i].TaskType = task.GetType()
 		}
 
-		query, args, err := tx.BindNamed(createTimerTasksSQLQuery, structs)
+		query, args, err := tx.BindNamed(createTimerTasksSQLQuery, timerTasksRows)
 		if err != nil {
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("Failed to create timer tasks. Failed to bind query. Error: %v", err),
@@ -1202,8 +1212,14 @@ func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTas
 	}
 
 	if deleteTimerTask != nil {
-		if _, err := tx.Exec(completeTimerTaskSQLQuery, shardID, persistence.GetVisibilityTSFrom(deleteTimerTask), deleteTimerTask.GetTaskID());
-			err != nil {
+		ts, err := persistence.GetVisibilityTSFrom(deleteTimerTask)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to delete timer task. Task: %v. Error: %v", deleteTimerTask, err),
+			}
+		}
+
+		if _, err := tx.Exec(completeTimerTaskSQLQuery, shardID, ts, deleteTimerTask.GetTaskID()); err != nil {
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("Failed to delete timer task. Task: %v. Error: %v", deleteTimerTask, err),
 			}
@@ -1211,21 +1227,4 @@ func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTas
 	}
 
 	return nil
-}
-
-func prepareLastReplicationInfoForSerialization(m map[string]*persistence.ReplicationInfo) map[string]persistence.ReplicationInfo {
-	// Dereference pointers since they can't be serialized.
-	x := make(map[string]persistence.ReplicationInfo)
-	for k, v := range m {
-		x[k] = *v
-	}
-	return x
-}
-
-func lastReplicationInfoFromSerialized(m map[string]persistence.ReplicationInfo) map[string]*persistence.ReplicationInfo {
-	x := make(map[string]*persistence.ReplicationInfo)
-	for k, v := range m {
-		x[k] = &v
-	}
-	return x
 }
