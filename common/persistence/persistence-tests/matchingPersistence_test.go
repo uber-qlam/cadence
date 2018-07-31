@@ -1693,6 +1693,8 @@ func (s *matchingPersistenceSuite) TestContinueAsNew() {
 		RunId:      common.StringPtr("64c7e15a-3fd7-4182-9c6f-6f25a4fa2614"),
 	}
 	err2 := s.ContinueAsNewExecution(continueAsNewInfo, info0.NextEventID, newWorkflowExecution, int64(3), int64(2))
+
+	//panic(3)
 	s.Nil(err2, "No error expected.")
 
 	prevExecutionState, err3 := s.GetWorkflowExecutionInfo(domainID, workflowExecution)
@@ -1710,6 +1712,7 @@ func (s *matchingPersistenceSuite) TestContinueAsNew() {
 	s.Equal(common.EmptyEventID, newExecutionInfo.LastProcessedEvent)
 	s.Equal(int64(2), newExecutionInfo.DecisionScheduleID)
 
+	//panic(3)
 	newRunID, err5 := s.GetCurrentWorkflowRunID(domainID, *workflowExecution.WorkflowId)
 	s.Nil(err5)
 	s.Equal(*newWorkflowExecution.RunId, newRunID)
