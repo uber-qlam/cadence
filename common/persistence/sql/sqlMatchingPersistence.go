@@ -511,8 +511,26 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 }
 
 func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkflowExecutionRequest) (*persistence.GetWorkflowExecutionResponse, error) {
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to start transaction. Error: %v", err),
+		}
+	}
+	defer tx.Rollback()
+
+	// Have to lock next_event_id so that things aren't modified while we are getting
+	// all the other parts of mutable state
+
+	if _, err := lockNextEventID(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId, *request.Execution.RunId);
+	err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to write-lock executions row. Error: %v", err),
+		}
+	}
+
 	var execution executionRow
-	if err := m.db.Get(&execution, getExecutionSQLQuery,
+	if err := sqlx.Get(tx, &execution, getExecutionSQLQuery,
 		m.shardID,
 		request.DomainID,
 		*request.Execution.WorkflowId,
@@ -583,6 +601,20 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 	if execution.CancelRequested != nil && (*execution.CancelRequested != 0) {
 		state.ExecutionInfo.CancelRequested = true
 		state.ExecutionInfo.CancelRequestID = *execution.CancelRequestID
+	}
+
+	{
+		var err error
+		state.ActivitInfos, err = getActivityInfoMap(tx,
+			m.shardID,
+			request.DomainID,
+			*request.Execution.WorkflowId,
+			*request.Execution.RunId)
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get activity info. Error: %v", err),
+			}
+		}
 	}
 
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
@@ -735,6 +767,18 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 	if rowsAffected != 1 {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. %v rows updated instead of 1.", rowsAffected),
+		}
+	}
+
+	if err := updateActivityInfos(tx,
+		request.UpsertActivityInfos,
+		request.DeleteActivityInfos,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
 		}
 	}
 
@@ -957,18 +1001,26 @@ func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExec
 }
 
 func lockAndCheckNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string, condition int64) error {
-	var nextEventID int64
-	if err := tx.Get(&nextEventID, lockAndCheckNextEventIdSQLQuery, shardID, domainID, workflowID, runID); err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("Failed to lock executions row to check next_event_id. Error: %v", err),
-		}
-	}
-	if nextEventID != condition {
-		return &persistence.ConditionFailedError{
-			Msg: fmt.Sprintf("next_event_id was %v when it should have been %v.", nextEventID, condition),
+	if nextEventID, err := lockNextEventID(tx, shardID, domainID, workflowID, runID); err != nil {
+		return err
+	} else {
+		if *nextEventID != condition {
+			return &persistence.ConditionFailedError{
+				Msg: fmt.Sprintf("next_event_id was %v when it should have been %v.", nextEventID, condition),
+			}
 		}
 	}
 	return nil
+}
+
+func lockNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) (*int64, error) {
+	var nextEventID int64
+	if err := tx.Get(&nextEventID, lockAndCheckNextEventIdSQLQuery, shardID, domainID, workflowID, runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to lock executions row. Error: %v", err),
+		}
+	}
+	return &nextEventID, nil
 }
 
 func createTransferTasks(tx *sqlx.Tx, transferTasks []persistence.Task, shardID int, domainID, workflowID, runID string) error {

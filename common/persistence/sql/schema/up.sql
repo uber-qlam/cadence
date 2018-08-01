@@ -170,3 +170,40 @@ CREATE TABLE timer_tasks (
 	PRIMARY KEY (shard_id, visibility_ts, task_id)
 );
 
+CREATE TABLE activity_info_maps (
+-- each row corresponds to one key of one map<string, ActivityInfo>
+	shard_id INT NOT NULL,
+	domain_id VARCHAR(64) NOT NULL,
+	workflow_id VARCHAR(255) NOT NULL,
+  run_id VARCHAR(64) NOT NULL,
+	schedule_id BIGINT NOT NULL, -- the key.
+-- fields of activity_info type follow
+version                   BIGINT NOT NULL,
+scheduled_event           BLOB NOT NULL,
+scheduled_time            TIMESTAMP NOT NULL,
+started_id                BIGINT NOT NULL,
+started_event             BLOB NOT NULL,
+started_time              TIMESTAMP NOT NULL,
+activity_id               VARCHAR(255) NOT NULL,
+request_id                VARCHAR(255) NOT NULL,
+details                   BLOB,
+schedule_to_start_timeout INT NOT NULL,
+schedule_to_close_timeout INT NOT NULL,
+start_to_close_timeout    INT NOT NULL,
+heartbeat_timeout        INT NOT NULL,
+cancel_requested          TINYINT(1),
+cancel_request_id         BIGINT NOT NULL,
+last_heartbeat_updated_time      TIMESTAMP NOT NULL,
+timer_task_status         INT NOT NULL,
+attempt                   INT NOT NULL,
+task_list                 VARCHAR(255) NOT NULL,
+started_identity          VARCHAR(255) NOT NULL,
+has_retry_policy          BOOLEAN NOT NULL,
+init_interval             INT NOT NULL,
+backoff_coefficient       DOUBLE NOT NULL,
+max_interval              INT NOT NULL,
+expiration_time           TIMESTAMP NOT NULL,
+max_attempts              INT NOT NULL,
+non_retriable_errors      BLOB, -- this was a list<text>. The use pattern is to replace, no modifications.
+	PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, schedule_id)
+);

@@ -1161,6 +1161,7 @@ func (s *matchingPersistenceSuite) TestWorkflowMutableState_Activities() {
 	s.Nil(err1, "No error expected.")
 	s.NotNil(state, "expected valid state.")
 	s.Equal(1, len(state.ActivitInfos))
+	log.Printf("%+v", state.ActivitInfos)
 	ai, ok := state.ActivitInfos[1]
 	s.True(ok)
 	s.NotNil(ai)
