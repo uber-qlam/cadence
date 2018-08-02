@@ -2,8 +2,6 @@ package sql
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/uber-common/bark"
 	workflow "github.com/uber/cadence/.gen/go/shared"
 	"github.com/uber/cadence/common/persistence"
@@ -34,26 +32,29 @@ type (
 )
 
 const (
-	appendHistorySQLQueryTemplate = `INSERT IGNORE INTO events (
-%v
+	appendHistorySQLQuery = `INSERT IGNORE INTO events (
+domain_id,workflow_id,run_id,first_event_id,data,data_encoding,data_version
 ) VALUES (
-%v
-);
-`
+:domain_id,:workflow_id,:run_id,:first_event_id,:data,:data_encoding,:data_version
+);`
 
-	overwriteHistorySQLQueryTemplate = `UPDATE events
+	overwriteHistorySQLQuery = `UPDATE events
 SET
-%v
+domain_id = :domain_id,
+workflow_id = :workflow_id,
+run_id = :run_id,
+first_event_id = :first_event_id,
+data = :data,
+data_encoding = :data_encoding,
+data_version = :data_version
 WHERE
-%v
-`
+domain_id = :domain_id AND 
+workflow_id = :workflow_id AND 
+run_id = :run_id AND 
+first_event_id = :first_event_id`
 
-	getHistorySQLQueryTemplate = `SELECT %v FROM events WHERE %v`
-
-	lockRangeIDAndTxIDSQLQueryTemplate = `SELECT range_id, tx_id FROM events WHERE
-%v
-FOR UPDATE
-`
+	pollHistorySQLQuery = `SELECT 1 FROM events WHERE domain_id = :domain_id AND 
+workflow_id= :workflow_id AND run_id= :run_id AND first_event_id= :first_event_id`
 
 	getWorkflowExecutionHistorySQLQuery = `SELECT first_event_id, data, data_encoding, data_version
 FROM events
@@ -66,48 +67,10 @@ first_event_id < ?`
 
 	deleteWorkflowExecutionHistorySQLQuery = `DELETE FROM events WHERE
 domain_id = ? AND workflow_id = ? AND run_id = ?`
+
+	lockRangeIDAndTxIDSQLQuery = `SELECT range_id, tx_id FROM events WHERE
+domain_id = ? AND workflow_id = ? AND run_id = ? AND first_event_id = ?`
 )
-
-func stringMap(a []string, f func(string) string) []string {
-	b := make([]string, len(a))
-	for i, v := range a {
-		b[i] = f(v)
-	}
-	return b
-}
-
-func makeAppendHistorySQLQuery(fields []string) string {
-	return fmt.Sprintf(appendHistorySQLQueryTemplate,
-		strings.Join(fields, ","),
-		strings.Join(stringMap(fields, func(x string) string {
-			return ":" + x
-		}), ","))
-}
-
-func makeOverwriteHistorySQLQuery(updateFields []string, whereFields []string) string {
-	return fmt.Sprintf(overwriteHistorySQLQueryTemplate,
-		strings.Join(stringMap(updateFields, func(x string) string {
-			return x + "= :" + x
-		}), ","),
-		strings.Join(stringMap(whereFields, func(x string) string {
-			return x + "= :" + x
-		}), " AND "))
-}
-
-func makeGetHistorySQLQuery(selectFields []string, whereFields []string) string {
-	return fmt.Sprintf(getHistorySQLQueryTemplate,
-		strings.Join(selectFields, ","),
-		strings.Join(stringMap(whereFields, func(x string) string {
-			return x + "= :" + x
-		}), " AND "))
-}
-
-func makeLockRangeIDAndTxIDSQLQuery(whereFields []string) string {
-	return fmt.Sprintf(lockRangeIDAndTxIDSQLQueryTemplate,
-		strings.Join(stringMap(whereFields, func(x string) string {
-			return x + " = ?"
-		}), " AND "))
-}
 
 func takeAddressIfNotNil(b []byte) *[]byte {
 	if b != nil {
@@ -115,16 +78,6 @@ func takeAddressIfNotNil(b []byte) *[]byte {
 	}
 	return nil
 }
-
-var (
-	eventsColumns           = []string{"domain_id", "workflow_id", "run_id", "first_event_id", "data", "data_encoding", "data_version"}
-	eventsPrimaryKeyColumns = []string{"domain_id", "workflow_id", "run_id", "first_event_id"}
-
-	appendHistorySQLQuery      = makeAppendHistorySQLQuery(eventsColumns)
-	overwriteHistorySQLQuery   = makeOverwriteHistorySQLQuery(eventsColumns, eventsPrimaryKeyColumns)
-	pollHistorySQLQuery = makeGetHistorySQLQuery([]string{"1"}, eventsPrimaryKeyColumns)
-	lockRangeIDAndTxIDSQLQuery = makeLockRangeIDAndTxIDSQLQuery(eventsPrimaryKeyColumns)
-)
 
 func (m *sqlHistoryManager) Close() {
 	if m.db != nil {
@@ -138,6 +91,8 @@ func NewHistoryPersistence(username, password, host, port, dbName string, logger
 	if err != nil {
 		return nil, err
 	}
+
+
 
 	return &sqlHistoryManager{
 		db:     db,
