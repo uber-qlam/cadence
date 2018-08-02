@@ -1168,7 +1168,7 @@ func (s *matchingPersistenceSuite) TestWorkflowMutableState_Activities() {
 	s.Equal(int64(7789), ai.Version)
 	s.Equal(int64(1), ai.ScheduleID)
 	s.Equal([]byte("scheduled_event_1"), ai.ScheduledEvent)
-	s.Equal(currentTime.Unix(), ai.ScheduledTime.Unix())
+	s.Equal(currentTime.Unix(), ai.ScheduledTime.Unix()) // This line is flakey
 	s.Equal(int64(2), ai.StartedID)
 	s.Equal([]byte("started_event_1"), ai.StartedEvent)
 	s.Equal(currentTime.Unix(), ai.StartedTime.Unix())

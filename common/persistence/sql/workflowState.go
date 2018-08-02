@@ -73,6 +73,33 @@ workflow_id = ? AND
 run_id = ?`
 )
 
+func makeDeleteMapSQLQuery(tableName string) string {
+	return fmt.Sprintf(deleteMapSQLQueryTemplate, tableName)
+}
+
+func makeSetKeyInMapSQLQuery(tableName string, nonPrimaryKeyColumns []string, mapKeyName string) string {
+	return fmt.Sprintf(setKeyInMapSQLQueryTemplate,
+		tableName,
+			strings.Join(nonPrimaryKeyColumns, ","),
+				strings.Join(stringMap(nonPrimaryKeyColumns, func(x string) string {
+					return ":" + x
+				}), ","),
+					mapKeyName)
+}
+
+func makeDeleteKeyInMapSQLQuery(tableName string, mapKeyName string) string {
+	return fmt.Sprintf(deleteKeyInMapSQLQueryTemplate,
+		tableName,
+			mapKeyName)
+}
+
+func makeGetMapSQLQueryTemplate(tableName string, nonPrimaryKeyColumns []string, mapKeyName string) string {
+	return fmt.Sprintf(getMapSQLQueryTemplate,
+		tableName,
+		mapKeyName,
+			strings.Join(nonPrimaryKeyColumns, ","))
+}
+
 var (
 	// Omit shard_id, run_id, domain_id, workflow_id, schedule_id since they're in the primary key
 	activityInfoColumns = []string{
@@ -107,19 +134,10 @@ var (
 	activityInfoTableName = "activity_info_maps"
 	activityInfoKey = "schedule_id"
 
-	deleteActivityInfoSQLQuery      = fmt.Sprintf(deleteMapSQLQueryTemplate, "activity_info_maps")
-	setKeyInActivityInfoMapSQLQuery = fmt.Sprintf(setKeyInMapSQLQueryTemplate,
-		activityInfoTableName,
-		strings.Join(activityInfoColumns, ","),
-		strings.Join(prependColons(activityInfoColumns), ","),
-		activityInfoKey)
-	deleteKeyInActivityInfoMapSQLQuery = fmt.Sprintf(deleteKeyInMapSQLQueryTemplate,
-		activityInfoTableName,
-		activityInfoKey)
-	getActivityInfoMapSQLQuery = fmt.Sprintf(getMapSQLQueryTemplate,
-		activityInfoTableName,
-		activityInfoKey,
-		strings.Join(append(activityInfoColumns), ","))
+	deleteActivityInfoSQLQuery      = makeDeleteMapSQLQuery(activityInfoTableName)
+	setKeyInActivityInfoMapSQLQuery = makeSetKeyInMapSQLQuery(activityInfoTableName, activityInfoColumns, activityInfoKey)
+	deleteKeyInActivityInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(activityInfoTableName, activityInfoKey)
+	getActivityInfoMapSQLQuery = makeGetMapSQLQueryTemplate(activityInfoTableName, activityInfoColumns, activityInfoKey)
 )
 
 type (
@@ -299,8 +317,6 @@ func getActivityInfoMap(tx *sqlx.Tx,
 	runID string) (map[int64]*persistence.ActivityInfo, error) {
 		var activityInfoMapsRows []activityInfoMapsRow
 
-		// TODO there's no way to verify we actually got the whole map.
-		// It's possible that we could just get a subset of the rows due to a network error.
 		if err := tx.Select(&activityInfoMapsRows,
 			getActivityInfoMapSQLQuery,
 			shardID,
