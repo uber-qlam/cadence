@@ -9,6 +9,7 @@ import (
 	"github.com/uber/cadence/common/persistence"
 
 	"github.com/hmgle/sqlx"
+	"strings"
 )
 
 type (
@@ -33,7 +34,7 @@ type (
 )
 
 const (
-	appendHistorySQLQuery = `INSERT IGNORE INTO events (
+	appendHistorySQLQuery = `INSERT INTO events (
 domain_id,workflow_id,run_id,first_event_id,data,data_encoding,data_version
 ) VALUES (
 :domain_id,:workflow_id,:run_id,:first_event_id,:data,:data_encoding,:data_version
@@ -166,26 +167,17 @@ func (m *sqlHistoryManager) AppendHistoryEvents(request *persistence.AppendHisto
 			}
 		}
 	} else {
-		if result, err := m.db.NamedExec(appendHistorySQLQuery, arg); err != nil {
+		if _, err := m.db.NamedExec(appendHistorySQLQuery, arg); err != nil {
+			// TODO Find another way to do this without inspecting the error message (?)
+			// Error 1062 indicates a duplicate primary key i.e. the row already exists,
+			// so we don't do the insert and return a ConditionalUpdate error.
+			if strings.HasPrefix(err.Error(), "Error 1062") {
+				return &persistence.ConditionFailedError{
+					Msg: fmt.Sprintf("AppendHistoryEvents operaiton failed. Couldn't insert since row already existed. Erorr: %v", err),
+				}
+			}
 			return &workflow.InternalServiceError{
 				Message: fmt.Sprintf("AppendHistoryEvents operation failed. Insert failed. Error: %v", err),
-			}
-		} else {
-			rowsAffected, err := result.RowsAffected()
-			if err != nil {
-				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Failed to check number of rows inserted. Error: %v", err),
-				}
-			}
-			switch {
-			case rowsAffected == 0:
-				return &persistence.ConditionFailedError{
-					Msg: fmt.Sprintf("AppendHistoryEvents operation failed. No rows were inserted, because a row with the same primary key already existed (probably)."),
-				}
-			case rowsAffected > 1:
-				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Inserted %v rows instead of one.", rowsAffected),
-				}
 			}
 		}
 	}
