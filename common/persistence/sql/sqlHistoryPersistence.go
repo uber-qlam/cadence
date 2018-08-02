@@ -63,6 +63,9 @@ workflow_id = ? AND
 run_id = ? AND
 first_event_id >= ? AND
 first_event_id < ?`
+
+	deleteWorkflowExecutionHistorySQLQuery = `DELETE FROM events WHERE
+domain_id = ? AND workflow_id = ? AND run_id = ?`
 )
 
 func stringMap(a []string, f func(string) string) []string {
@@ -249,6 +252,13 @@ func (m *sqlHistoryManager) GetWorkflowExecutionHistory(request *persistence.Get
 		}
 	}
 
+	if len(rows) == 0 {
+		return nil, &workflow.EntityNotExistsError{
+			Message: fmt.Sprintf("Workflow execution history not found.  WorkflowId: %v, RunId: %v",
+				*request.Execution.WorkflowId, *request.Execution.RunId),
+		}
+	}
+
 	events := make([]persistence.SerializedHistoryEventBatch, len(rows))
 	for i, v := range rows {
 		events[i].EncodingType = common.EncodingType(v.DataEncoding)
@@ -265,7 +275,13 @@ func (m *sqlHistoryManager) GetWorkflowExecutionHistory(request *persistence.Get
 }
 
 func (m *sqlHistoryManager) DeleteWorkflowExecutionHistory(request *persistence.DeleteWorkflowExecutionHistoryRequest) error {
-	panic("implement me")
+	if _, err := m.db.Exec(deleteWorkflowExecutionHistorySQLQuery, request.DomainID, request.Execution.WorkflowId, request.Execution.RunId);
+	err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("DeleteWorkflowExecutionHistory operation failed. Error: %v", err),
+		}
+	}
+	return nil
 }
 
 func lockAndCheckRangeIDAndTxID(tx *sqlx.Tx,
