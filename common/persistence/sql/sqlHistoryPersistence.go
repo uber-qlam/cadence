@@ -9,6 +9,7 @@ import (
 	"github.com/uber/cadence/common/persistence"
 
 	"github.com/hmgle/sqlx"
+	"github.com/uber/cadence/common"
 )
 
 type (
@@ -53,6 +54,15 @@ WHERE
 %v
 FOR UPDATE
 `
+
+	getWorkflowExecutionHistorySQLQuery = `SELECT first_event_id, data, data_encoding, data_version
+FROM events
+WHERE
+domain_id = ? AND
+workflow_id = ? AND
+run_id = ? AND
+first_event_id >= ? AND
+first_event_id < ?`
 )
 
 func stringMap(a []string, f func(string) string) []string {
@@ -109,7 +119,6 @@ var (
 
 	appendHistorySQLQuery      = makeAppendHistorySQLQuery(eventsColumns)
 	overwriteHistorySQLQuery   = makeOverwriteHistorySQLQuery(eventsColumns, eventsPrimaryKeyColumns)
-	getHistorySQLQuery = makeGetHistorySQLQuery(eventsColumns, eventsPrimaryKeyColumns)
 	pollHistorySQLQuery = makeGetHistorySQLQuery([]string{"1"}, eventsPrimaryKeyColumns)
 	lockRangeIDAndTxIDSQLQuery = makeLockRangeIDAndTxIDSQLQuery(eventsPrimaryKeyColumns)
 )
@@ -227,7 +236,32 @@ func (m *sqlHistoryManager) AppendHistoryEvents(request *persistence.AppendHisto
 
 func (m *sqlHistoryManager) GetWorkflowExecutionHistory(request *persistence.GetWorkflowExecutionHistoryRequest) (*persistence.GetWorkflowExecutionHistoryResponse,
 	error) {
-	panic("implement me")
+	var rows []eventsRow
+	if err := m.db.Select(&rows,
+		getWorkflowExecutionHistorySQLQuery,
+			request.DomainID,
+				request.Execution.WorkflowId,
+					request.Execution.RunId,
+						request.FirstEventID,
+							request.NextEventID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("GetWorkflowExecutionHistory operation failed. Select failed. Error: %v", err),
+		}
+	}
+
+	events := make([]persistence.SerializedHistoryEventBatch, len(rows))
+	for i, v := range rows {
+		events[i].EncodingType = common.EncodingType(v.DataEncoding)
+		events[i].Version = int(v.DataVersion)
+		if v.Data != nil {
+			events[i].Data = *v.Data
+		}
+	}
+
+	return &persistence.GetWorkflowExecutionHistoryResponse{
+		Events: events,
+		NextPageToken: []byte{},
+	}, nil
 }
 
 func (m *sqlHistoryManager) DeleteWorkflowExecutionHistory(request *persistence.DeleteWorkflowExecutionHistoryRequest) error {
