@@ -617,6 +617,20 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		}
 	}
 
+	{
+		var err error
+		state.TimerInfos, err = getTimerInfoMap(tx,
+			m.shardID,
+			request.DomainID,
+			*request.Execution.WorkflowId,
+			*request.Execution.RunId)
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get timer info. Error: %v", err),
+			}
+		}
+	}
+
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
 }
 
@@ -777,6 +791,18 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		request.ExecutionInfo.DomainID,
 		request.ExecutionInfo.WorkflowID,
 		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
+		}
+	}
+
+	if err := updateTimerInfos(tx,
+		request.UpserTimerInfos,
+			request.DeleteTimerInfos,
+				m.shardID,
+					request.ExecutionInfo.DomainID,
+						request.ExecutionInfo.WorkflowID,
+							request.ExecutionInfo.RunID); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
 		}

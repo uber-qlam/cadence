@@ -376,3 +376,161 @@ func getActivityInfoMap(tx *sqlx.Tx,
 
 		return ret, nil
 }
+
+var (
+	timerInfoColumns = []string{
+		"version",
+		"started_id",
+		"expiry_time",
+		"task_id",
+	}
+	timerInfoTableName = "timer_info_maps"
+	timerInfoKey = "timer_id"
+
+	deleteTimerInfoSQLQuery      = makeDeleteMapSQLQuery(timerInfoTableName)
+	setKeyInTimerInfoMapSQLQuery = makeSetKeyInMapSQLQuery(timerInfoTableName, timerInfoColumns, timerInfoKey)
+	deleteKeyInTimerInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(timerInfoTableName, timerInfoKey)
+	getTimerInfoMapSQLQuery = makeGetMapSQLQueryTemplate(timerInfoTableName, timerInfoColumns, timerInfoKey)
+)
+
+type (
+	timerInfoMapsPrimaryKey struct {
+		ShardID    int64  `db:"shard_id"`
+		DomainID   string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+		RunID      string `db:"run_id"`
+		TimerID string  `db:"timer_id"`
+	}
+
+	timerInfoMapsRow struct {
+		timerInfoMapsPrimaryKey
+		Version int64 `db:"version"`
+		StartedID int64 `db:"started_id"`
+		ExpiryTime time.Time `db:"expiry_time"`
+		TaskID int64 `db:"task_id"`
+	}
+)
+
+func updateTimerInfos(tx *sqlx.Tx,
+	timerInfos []*persistence.TimerInfo,
+	deleteInfos []string,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) error {
+	if len(timerInfos) > 0 {
+		timerInfoMapsRows := make([]*timerInfoMapsRow, len(timerInfos))
+		for i, v := range timerInfos {
+			timerInfoMapsRows[i] = &timerInfoMapsRow{
+				timerInfoMapsPrimaryKey: timerInfoMapsPrimaryKey{
+					ShardID: int64(shardID),
+					DomainID: domainID,
+					WorkflowID: workflowID,
+					RunID: runID,
+					TimerID: v.TimerID,
+				},
+				Version: v.Version,
+				StartedID: v.StartedID,
+				ExpiryTime: v.ExpiryTime,
+				TaskID: v.TaskID,
+			}
+		}
+
+		query, args, err := tx.BindNamed(setKeyInTimerInfoMapSQLQuery, timerInfoMapsRows)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update timer info. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update timer info. Failed to execute update query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Failed to verify number of rows updated. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != len(timerInfos) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Touched %v rows instead of %v", len(timerInfos), rowsAffected),
+				}
+			}
+		}
+
+	}
+	if len(deleteInfos) > 0 {
+		timerInfoMapsPrimaryKeys := make([]*timerInfoMapsPrimaryKey, len(deleteInfos))
+		for i, v := range deleteInfos {
+			timerInfoMapsPrimaryKeys[i] = &timerInfoMapsPrimaryKey{
+				ShardID:    int64(shardID),
+				DomainID:   domainID,
+				WorkflowID: workflowID,
+				RunID:      runID,
+				TimerID: v,
+			}
+		}
+
+		query, args, err := tx.BindNamed(deleteKeyInTimerInfoMapSQLQuery, timerInfoMapsPrimaryKeys)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update timer info. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update timer info. Failed to execute delete query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Failed to verify number of rows deleted. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != len(deleteInfos) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Deleted %v rows instead of %v", len(timerInfos), rowsAffected),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getTimerInfoMap(tx *sqlx.Tx,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) (map[string]*persistence.TimerInfo, error) {
+	var timerInfoMapsRows []timerInfoMapsRow
+
+	if err := tx.Select(&timerInfoMapsRows,
+		getTimerInfoMapSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get timer info. Error: %v", err),
+		}
+	}
+
+	ret := make(map[string]*persistence.TimerInfo)
+	for _, v := range timerInfoMapsRows {
+		ret[v.TimerID] = &persistence.TimerInfo{
+			Version: v.Version,
+			TimerID: v.TimerID,
+			StartedID: v.StartedID,
+			ExpiryTime: v.ExpiryTime,
+			TaskID: v.TaskID,
+		}
+	}
+
+	return ret, nil
+}

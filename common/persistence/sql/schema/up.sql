@@ -117,9 +117,9 @@ CREATE TABLE current_executions(
 );
 
 CREATE TABLE tasks (
-  domain_id VARCHAR(64) NOT NULL,
+  domain_id CHAR(64) NOT NULL,
   workflow_id VARCHAR(255) NOT NULL,
-  run_id VARCHAR(64) NOT NULL,
+  run_id CHAR(64) NOT NULL,
   schedule_id BIGINT NOT NULL,
   task_list_name VARCHAR(255) NOT NULL,
   task_list_type TINYINT NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE tasks (
 );
 
 CREATE TABLE task_lists (
-	domain_id VARCHAR(64) NOT NULL,
+	domain_id CHAR(64) NOT NULL,
 	range_id BIGINT NOT NULL,
 	name VARCHAR(255) NOT NULL,
 	type TINYINT NOT NULL, -- {Activity, Decision}
@@ -140,9 +140,9 @@ CREATE TABLE task_lists (
 );
 
 CREATE TABLE replication_tasks (
-	domain_id VARCHAR(64) NOT NULL,
+	domain_id CHAR(64) NOT NULL,
 	workflow_id VARCHAR(255) NOT NULL,
-	run_id VARCHAR(64) NOT NULL,
+	run_id CHAR(64) NOT NULL,
 	task_id BIGINT NOT NULL,
 	type TINYINT NOT NULL,
 	first_event_id BIGINT NOT NULL,
@@ -155,9 +155,9 @@ PRIMARY KEY (shard_id, task_id)
 );
 
 CREATE TABLE timer_tasks (
-	domain_id VARCHAR(64) NOT NULL,
+	domain_id CHAR(64) NOT NULL,
 	workflow_id VARCHAR(255) NOT NULL,
-	run_id VARCHAR(64) NOT NULL,
+	run_id CHAR(64) NOT NULL,
 	visibility_ts TIMESTAMP(3) NOT NULL,
 	task_id BIGINT NOT NULL,
 	type TINYINT NOT NULL,
@@ -173,9 +173,9 @@ CREATE TABLE timer_tasks (
 CREATE TABLE activity_info_maps (
 -- each row corresponds to one key of one map<string, ActivityInfo>
 	shard_id INT NOT NULL,
-	domain_id VARCHAR(64) NOT NULL,
+	domain_id CHAR(64) NOT NULL,
 	workflow_id VARCHAR(255) NOT NULL,
-  run_id VARCHAR(64) NOT NULL,
+  run_id CHAR(64) NOT NULL,
 	schedule_id BIGINT NOT NULL, -- the key.
 -- fields of activity_info type follow
 version                   BIGINT NOT NULL,
@@ -206,4 +206,18 @@ expiration_time           TIMESTAMP NOT NULL,
 max_attempts              INT NOT NULL,
 non_retriable_errors      BLOB, -- this was a list<text>. The use pattern is to replace, no modifications.
 	PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, schedule_id)
+);
+
+CREATE TABLE timer_info_maps (
+shard_id INT NOT NULL,
+domain_id CHAR(64) NOT NULL,
+workflow_id VARCHAR(255) NOT NULL,
+run_id CHAR(64) NOT NULL,
+timer_id VARCHAR(255) NOT NULL, -- what string type should this be?
+--
+  version BIGINT NOT NULL,
+  started_id BIGINT NOT NULL,
+  expiry_time TIMESTAMP NOT NULL,
+  task_id BIGINT NOT NULL,
+  PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, timer_id)
 );

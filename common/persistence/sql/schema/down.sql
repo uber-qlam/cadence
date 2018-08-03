@@ -9,3 +9,4 @@ DROP TABLE IF EXISTS timer_tasks;
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS task_lists;
 DROP TABLE IF EXISTS activity_info_maps;
+DROP TABLE IF EXISTS timer_info_maps;
