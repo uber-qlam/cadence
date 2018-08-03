@@ -264,3 +264,19 @@ input BLOB,
 control BLOB,
 PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, initiated_id)
 );
+
+
+CREATE TABLE buffered_replication_task_maps (
+ shard_id INT NOT NULL,
+domain_id CHAR(64) NOT NULL,
+workflow_id VARCHAR(255) NOT NULL,
+run_id CHAR(64) NOT NULL,
+first_event_id BIGINT NOT NULL,
+--
+version BIGINT NOT NULL,
+next_event_id BIGINT NOT NULL,
+history BLOB,
+new_run_history BLOB,
+PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, first_event_id)
+);
+

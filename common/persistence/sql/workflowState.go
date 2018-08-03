@@ -644,7 +644,7 @@ func updateChildExecutionInfos(tx *sqlx.Tx,
 			}
 			if int(rowsAffected) != 1 {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Failed to update child execution info. Deleted %v rows instead of %v", len(childExecutionInfos), rowsAffected),
+					Message: fmt.Sprintf("Failed to update child execution info. Deleted %v rows instead of 1", rowsAffected),
 				}
 			}
 		}
@@ -787,7 +787,7 @@ func updateRequestCancelInfos(tx *sqlx.Tx,
 			}
 			if int(rowsAffected) != 1 {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Failed to update request cancel info. Deleted %v rows instead of %v", len(deleteRequestCancelInfoSQLQuery), rowsAffected),
+					Message: fmt.Sprintf("Failed to update request cancel info. Deleted %v rows instead of 1", rowsAffected),
 				}
 			}
 		}
@@ -935,7 +935,7 @@ func updateSignalInfos(tx *sqlx.Tx,
 			}
 			if int(rowsAffected) != 1 {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Failed to update signal info. Deleted %v rows instead of %v", len(deleteSignalInfoSQLQuery), rowsAffected),
+					Message: fmt.Sprintf("Failed to update signal info. Deleted %v rows instead of 1", rowsAffected),
 				}
 			}
 		}
@@ -971,6 +971,179 @@ func getSignalInfoMap(tx *sqlx.Tx,
 			SignalName: v.SignalName,
 			Input: dereferenceIfNotNil(v.Input),
 			Control: dereferenceIfNotNil(v.Control),
+		}
+	}
+
+	return ret, nil
+}
+
+var (
+	bufferedReplicationTasksMapColumns = []string{
+		"version",
+		"next_event_id",
+		"history",
+		"new_run_history",
+	}
+	bufferedReplicationTasksTableName = "buffered_replication_task_maps"
+	bufferedReplicationTasksKey = "first_event_id"
+
+	deleteBufferedReplicationTasksMapSQLQuery      = makeDeleteMapSQLQuery(bufferedReplicationTasksTableName)
+	setKeyInBufferedReplicationTasksMapSQLQuery = makeSetKeyInMapSQLQuery(bufferedReplicationTasksTableName, bufferedReplicationTasksMapColumns, bufferedReplicationTasksKey)
+	deleteKeyInBufferedReplicationTasksMapSQLQuery = makeDeleteKeyInMapSQLQuery(bufferedReplicationTasksTableName, bufferedReplicationTasksKey)
+	getBufferedReplicationTasksMapSQLQuery = makeGetMapSQLQueryTemplate(bufferedReplicationTasksTableName, bufferedReplicationTasksMapColumns, bufferedReplicationTasksKey)
+
+
+)
+
+
+type (
+	bufferedReplicationTaskMapsPrimaryKey struct {
+		ShardID    int64  `db:"shard_id"`
+		DomainID   string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+		RunID      string `db:"run_id"`
+		FirstEventID int64  `db:"first_event_id"`
+	}
+
+	bufferedReplicationTaskMapsRow struct {
+		bufferedReplicationTaskMapsPrimaryKey
+		NextEventID int64 `db:"next_event_id"`
+		Version int64 `db:"version"`
+		History *[]byte `db:"history"`
+		NewRunHistory *[]byte `db:"new_run_history"`
+	}
+)
+
+func updateBufferedReplicationTasks(tx *sqlx.Tx,
+	newBufferedReplicationTask *persistence.BufferedReplicationTask,
+	deleteInfo *int64,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) error {
+	if newBufferedReplicationTask != nil {
+		arg := &bufferedReplicationTaskMapsRow{
+				bufferedReplicationTaskMapsPrimaryKey: bufferedReplicationTaskMapsPrimaryKey{
+					ShardID: int64(shardID),
+					DomainID: domainID,
+					WorkflowID: workflowID,
+					RunID: runID,
+					FirstEventID: newBufferedReplicationTask.FirstEventID,
+				},
+				Version: newBufferedReplicationTask.Version,
+				NextEventID: newBufferedReplicationTask.NextEventID,
+			}
+
+			if newBufferedReplicationTask.History != nil {
+				if b, err := gobSerialize(&newBufferedReplicationTask.History); err != nil {
+					return &workflow.InternalServiceError{
+						Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to serialize a BufferedReplicationTask.History. Error: %v", err),
+					}
+				} else {
+					arg.History = &b
+				}
+			}
+
+			if newBufferedReplicationTask.NewRunHistory != nil {
+				if b, err := gobSerialize(&newBufferedReplicationTask.NewRunHistory); err != nil {
+					return &workflow.InternalServiceError{
+						Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to serialize a BufferedReplicationTask.NewRunHistory. Error: %v", err),
+					}
+				} else {
+					arg.NewRunHistory = &b
+				}
+			}
+
+		if result, err := tx.NamedExec(setKeyInBufferedReplicationTasksMapSQLQuery, arg); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to execute update query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to verify number of rows updated. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update buffered replication tasks. Touched %v rows instead of 1", rowsAffected),
+				}
+			}
+		}
+
+	}
+	if deleteInfo != nil {
+		if result, err := tx.NamedExec(deleteKeyInBufferedReplicationTasksMapSQLQuery, &bufferedReplicationTaskMapsPrimaryKey{
+			ShardID:    int64(shardID),
+			DomainID:   domainID,
+			WorkflowID: workflowID,
+			RunID:      runID,
+			FirstEventID: *deleteInfo,
+		}); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to execute delete query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update buffered replication tasks. Failed to verify number of rows deleted. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update buffered replication tasks. Deleted %v rows instead of 1", rowsAffected),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getBufferedReplicationTasks(tx *sqlx.Tx,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) (map[int64]*persistence.BufferedReplicationTask, error) {
+	var bufferedReplicationTaskMapsRows []bufferedReplicationTaskMapsRow
+
+	if err := tx.Select(&bufferedReplicationTaskMapsRows,
+		getBufferedReplicationTasksMapSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get buffered replication tasks. Error: %v", err),
+		}
+	}
+
+	ret := make(map[int64]*persistence.BufferedReplicationTask)
+	for _, v := range bufferedReplicationTaskMapsRows {
+		ret[v.FirstEventID] = &persistence.BufferedReplicationTask{
+			Version: v.Version,
+			FirstEventID: v.FirstEventID,
+			NextEventID: v.NextEventID,
+		}
+
+		if v.History != nil {
+			ret[v.FirstEventID].History = &persistence.SerializedHistoryEventBatch{}
+			if err := gobDeserialize(*v.History, &ret[v.FirstEventID].History); err != nil {
+				return nil, &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to get buffered replication tasks. Failed to deserialize a BufferedReplicationTask.History. Error: %v", err),
+				}
+			}
+		}
+
+		if v.NewRunHistory != nil {
+			ret[v.FirstEventID].NewRunHistory = &persistence.SerializedHistoryEventBatch{}
+			if err := gobDeserialize(*v.NewRunHistory, &ret[v.FirstEventID].NewRunHistory); err != nil {
+				return nil, &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to get buffered replication tasks. Failed to deserialize a BufferedReplicationTask.NewRunHistory. Error: %v", err),
+				}
+			}
 		}
 	}
 
