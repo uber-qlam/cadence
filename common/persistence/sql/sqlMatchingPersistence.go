@@ -647,6 +647,20 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		}
 	}
 
+	{
+		var err error
+		state.RequestCancelInfos, err = getRequestCancelInfoMap(tx,
+			m.shardID,
+			request.DomainID,
+			*request.Execution.WorkflowId,
+			*request.Execution.RunId)
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get request cancel info. Error: %v", err),
+			}
+		}
+	}
+
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
 }
 
@@ -827,6 +841,18 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 	if err := updateChildExecutionInfos(tx,
 		request.UpsertChildExecutionInfos,
 		request.DeleteChildExecutionInfo,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
+		}
+	}
+
+	if err := updateRequestCancelInfos(tx,
+		request.UpsertRequestCancelInfos,
+		request.DeleteRequestCancelInfo,
 		m.shardID,
 		request.ExecutionInfo.DomainID,
 		request.ExecutionInfo.WorkflowID,

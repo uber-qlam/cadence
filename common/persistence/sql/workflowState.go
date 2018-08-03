@@ -686,3 +686,142 @@ func getChildExecutionInfoMap(tx *sqlx.Tx,
 
 	return ret, nil
 }
+
+
+var (
+	requestCancelInfoColumns = []string{
+		"version",
+		"cancel_request_id",
+	}
+	requestCancelInfoTableName = "request_cancel_info_maps"
+	requestCancelInfoKey = "initiated_id"
+
+	deleteRequestCancelInfoSQLQuery      = makeDeleteMapSQLQuery(requestCancelInfoTableName)
+	setKeyInRequestCancelInfoMapSQLQuery = makeSetKeyInMapSQLQuery(requestCancelInfoTableName, requestCancelInfoColumns, requestCancelInfoKey)
+	deleteKeyInRequestCancelInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(requestCancelInfoTableName, requestCancelInfoKey)
+	getRequestCancelInfoMapSQLQuery = makeGetMapSQLQueryTemplate(requestCancelInfoTableName, requestCancelInfoColumns, requestCancelInfoKey)
+)
+
+type (
+	requestCancelInfoMapsPrimaryKey struct {
+		ShardID    int64  `db:"shard_id"`
+		DomainID   string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+		RunID      string `db:"run_id"`
+		InitiatedID int64  `db:"initiated_id"`
+	}
+
+	requestCancelInfoMapsRow struct {
+		requestCancelInfoMapsPrimaryKey
+		Version int64 `db:"version"`
+		CancelRequestID string `db:"cancel_request_id"`
+	}
+)
+
+func updateRequestCancelInfos(tx *sqlx.Tx,
+	requestCancelInfos []*persistence.RequestCancelInfo,
+	deleteInfo *int64,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) error {
+	if len(requestCancelInfos) > 0 {
+		requestCancelInfoMapsRows := make([]*requestCancelInfoMapsRow, len(requestCancelInfos))
+		for i, v := range requestCancelInfos {
+			requestCancelInfoMapsRows[i] = &requestCancelInfoMapsRow{
+				requestCancelInfoMapsPrimaryKey: requestCancelInfoMapsPrimaryKey{
+					ShardID: int64(shardID),
+					DomainID: domainID,
+					WorkflowID: workflowID,
+					RunID: runID,
+					InitiatedID: v.InitiatedID,
+				},
+				Version: v.Version,
+				CancelRequestID: v.CancelRequestID,
+			}
+		}
+
+		query, args, err := tx.BindNamed(setKeyInRequestCancelInfoMapSQLQuery, requestCancelInfoMapsRows)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update request cancel info. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update request cancel info. Failed to execute update query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update request cancel info. Failed to verify number of rows updated. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != len(requestCancelInfos) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update request cancel info. Touched %v rows instead of %v", len(requestCancelInfos), rowsAffected),
+				}
+			}
+		}
+
+	}
+	if deleteInfo != nil {
+		if result, err := tx.NamedExec(deleteKeyInRequestCancelInfoMapSQLQuery, &requestCancelInfoMapsPrimaryKey{
+			ShardID:    int64(shardID),
+			DomainID:   domainID,
+			WorkflowID: workflowID,
+			RunID:      runID,
+			InitiatedID: *deleteInfo,
+		}); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update timer info. Failed to execute delete query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Failed to verify number of rows deleted. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update timer info. Deleted %v rows instead of %v", len(deleteRequestCancelInfoSQLQuery), rowsAffected),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getRequestCancelInfoMap(tx *sqlx.Tx,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) (map[int64]*persistence.RequestCancelInfo, error) {
+	var requestCancelInfoMapsRows []requestCancelInfoMapsRow
+
+	if err := tx.Select(&requestCancelInfoMapsRows,
+		getRequestCancelInfoMapSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get request cancel info. Error: %v", err),
+		}
+	}
+
+	ret := make(map[int64]*persistence.RequestCancelInfo)
+	for _, v := range requestCancelInfoMapsRows {
+		ret[v.InitiatedID] = &persistence.RequestCancelInfo{
+			Version: v.Version,
+			CancelRequestID: v.CancelRequestID,
+			InitiatedID: v.InitiatedID,
+		}
+	}
+
+	return ret, nil
+}
