@@ -73,3 +73,17 @@ func int64ToBool(i int64) bool {
 	}
 	return true
 }
+
+func takeAddressIfNotNil(a []byte) *[]byte {
+	if a != nil {
+		return &a
+	}
+	return nil
+}
+
+func dereferenceIfNotNil(a *[]byte) []byte {
+	if a != nil {
+		return *a
+	}
+	return nil
+}

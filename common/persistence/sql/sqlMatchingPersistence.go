@@ -224,14 +224,16 @@ cancel_request_id`
 	executionsReplicationStateColumns     = `start_version`
 	executionsReplicationStateColumnsTags = `:start_version`
 
-	createExecutionWithNoParentSQLQuery = `INSERT INTO executions 
-(` + executionsNonNullableColumns +
+	createExecutionSQLQuery = `INSERT INTO executions 
+(` + executionsNonNullableColumns + `,` +
+		executionsNonblobParentColumns +
 		`,
 execution_context,
 cancel_requested,
 cancel_request_id)
 VALUES
-(` + executionsNonNullableColumnsTags + `,
+(` + executionsNonNullableColumnsTags + `,` +
+		executionsNonblobParentColumnsTags + `,
 :execution_context,
 :cancel_requested,
 :cancel_request_id)
@@ -631,6 +633,20 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		}
 	}
 
+	{
+		var err error
+		state.ChildExecutionInfos, err = getChildExecutionInfoMap(tx,
+			m.shardID,
+			request.DomainID,
+			*request.Execution.WorkflowId,
+			*request.Execution.RunId)
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get child execution info. Error: %v", err),
+			}
+		}
+	}
+
 	return &persistence.GetWorkflowExecutionResponse{State: &state}, nil
 }
 
@@ -808,6 +824,18 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
+	if err := updateChildExecutionInfos(tx,
+		request.UpsertChildExecutionInfos,
+		request.DeleteChildExecutionInfo,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to commit transaction. Error: %v", err),
@@ -967,7 +995,7 @@ func getCurrentExecutionIfExists(tx *sqlx.Tx, shardID int, domainID string, work
 
 func createExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRequest, shardID int) error {
 	nowTimestamp := time.Now()
-	_, err := tx.NamedExec(createExecutionWithNoParentSQLQuery, &executionRow{
+	arg :=  &executionRow{
 		ShardID:                    shardID,
 		DomainID:                   request.DomainID,
 		WorkflowID:                 *request.Execution.WorkflowId,
@@ -995,7 +1023,16 @@ func createExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExecutionRe
 		ClientLibraryVersion:         "",
 		ClientFeatureVersion:         "",
 		ClientImpl:                   "",
-	})
+	}
+	if request.ParentExecution != nil {
+		arg.InitiatedID = &request.InitiatedID
+		arg.ParentDomainID = &request.ParentDomainID
+		arg.ParentWorkflowID = request.ParentExecution.WorkflowId
+		arg.ParentRunID = request.ParentExecution.RunId
+	}
+
+	_, err := tx.NamedExec(createExecutionSQLQuery, arg)
+
 	if err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Failed to insert into executions table. Error: %v", err),
@@ -1016,6 +1053,9 @@ func createCurrentExecution(tx *sqlx.Tx, request *persistence.CreateWorkflowExec
 	}
 	if request.ReplicationState != nil {
 		arg.StartVersion = &request.ReplicationState.StartVersion
+	}
+	if request.ParentExecution != nil {
+		arg.State = persistence.WorkflowStateCreated
 	}
 
 	if _, err := tx.NamedExec(createCurrentExecutionSQLQuery, &arg); err != nil {

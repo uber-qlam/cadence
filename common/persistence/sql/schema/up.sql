@@ -221,3 +221,18 @@ timer_id VARCHAR(255) NOT NULL, -- what string type should this be?
   task_id BIGINT NOT NULL,
   PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, timer_id)
 );
+
+CREATE TABLE child_execution_info_maps (
+  shard_id INT NOT NULL,
+domain_id CHAR(64) NOT NULL,
+workflow_id VARCHAR(255) NOT NULL,
+run_id CHAR(64) NOT NULL,
+initiated_id BIGINT NOT NULL,
+--
+version BIGINT NOT NULL,
+initiated_event BLOB,
+started_id BIGINT NOT NULL,
+started_event BLOB,
+create_request_id CHAR(64),
+PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, initiated_id)
+);

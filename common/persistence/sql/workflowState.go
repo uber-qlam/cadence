@@ -534,3 +534,155 @@ func getTimerInfoMap(tx *sqlx.Tx,
 
 	return ret, nil
 }
+
+
+var (
+	childExecutionInfoColumns = []string{
+		"version",
+		"initiated_event",
+		"started_id",
+		"started_event",
+		"create_request_id",
+	}
+	childExecutionInfoTableName = "child_execution_info_maps"
+	childExecutionInfoKey = "initiated_id"
+
+	deleteChildExecutionInfoSQLQuery      = makeDeleteMapSQLQuery(childExecutionInfoTableName)
+	setKeyInChildExecutionInfoMapSQLQuery = makeSetKeyInMapSQLQuery(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
+	deleteKeyInChildExecutionInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(childExecutionInfoTableName, childExecutionInfoKey)
+	getChildExecutionInfoMapSQLQuery = makeGetMapSQLQueryTemplate(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
+)
+
+type (
+	childExecutionInfoMapsPrimaryKey struct {
+		ShardID    int64  `db:"shard_id"`
+		DomainID   string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+		RunID      string `db:"run_id"`
+		InitiatedID int64  `db:"initiated_id"`
+	}
+
+	childExecutionInfoMapsRow struct {
+		childExecutionInfoMapsPrimaryKey
+		Version int64 `db:"version"`
+		InitiatedEvent *[]byte `db:"initiated_event"`
+		StartedID int64 `db:"started_id"`
+		StartedEvent *[]byte `db:"started_event"`
+		CreateRequestID string `db:"create_request_id"`
+	}
+)
+
+func updateChildExecutionInfos(tx *sqlx.Tx,
+	childExecutionInfos []*persistence.ChildExecutionInfo,
+	deleteInfos *int64,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) error {
+	if len(childExecutionInfos) > 0 {
+		timerInfoMapsRows := make([]*childExecutionInfoMapsRow, len(childExecutionInfos))
+		for i, v := range childExecutionInfos {
+			timerInfoMapsRows[i] = &childExecutionInfoMapsRow{
+				childExecutionInfoMapsPrimaryKey: childExecutionInfoMapsPrimaryKey{
+					ShardID: int64(shardID),
+					DomainID: domainID,
+					WorkflowID: workflowID,
+					RunID: runID,
+					InitiatedID: v.InitiatedID,
+				},
+				Version: v.Version,
+				InitiatedEvent: takeAddressIfNotNil(v.InitiatedEvent),
+				StartedID: v.StartedID,
+				StartedEvent: takeAddressIfNotNil(v.StartedEvent),
+				CreateRequestID: v.CreateRequestID,
+			}
+		}
+
+		query, args, err := tx.BindNamed(setKeyInChildExecutionInfoMapSQLQuery, timerInfoMapsRows)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update child execution info. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update child execution info. Failed to execute update query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update child execution info. Failed to verify number of rows updated. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != len(childExecutionInfos) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update child execution info. Touched %v rows instead of %v", len(childExecutionInfos), rowsAffected),
+				}
+			}
+		}
+
+	}
+	if deleteInfos != nil {
+		if result, err := tx.NamedExec(deleteKeyInChildExecutionInfoMapSQLQuery, &childExecutionInfoMapsPrimaryKey{
+			ShardID:    int64(shardID),
+			DomainID:   domainID,
+			WorkflowID: workflowID,
+			RunID:      runID,
+			InitiatedID: *deleteInfos,
+		}); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update child execution info. Failed to execute delete query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update child execution info. Failed to verify number of rows deleted. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update child execution info. Deleted %v rows instead of %v", len(childExecutionInfos), rowsAffected),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getChildExecutionInfoMap(tx *sqlx.Tx,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) (map[int64]*persistence.ChildExecutionInfo, error) {
+	var childExecutionInfoMapsRows []childExecutionInfoMapsRow
+
+	if err := tx.Select(&childExecutionInfoMapsRows,
+		getChildExecutionInfoMapSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get timer info. Error: %v", err),
+		}
+	}
+
+	ret := make(map[int64]*persistence.ChildExecutionInfo)
+	for _, v := range childExecutionInfoMapsRows {
+		ret[v.InitiatedID] = &persistence.ChildExecutionInfo{
+			InitiatedID: v.InitiatedID,
+			Version: v.Version,
+			InitiatedEvent: dereferenceIfNotNil(v.InitiatedEvent),
+			StartedID: v.StartedID,
+			StartedEvent: dereferenceIfNotNil(v.StartedEvent),
+			CreateRequestID: v.CreateRequestID,
+		}
+
+	}
+
+	return ret, nil
+}
