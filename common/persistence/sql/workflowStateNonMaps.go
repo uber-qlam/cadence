@@ -115,3 +115,4 @@ func getSignalsRequested(tx *sqlx.Tx,
 		}
 		return ret, nil
 }
+

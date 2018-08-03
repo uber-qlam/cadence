@@ -1225,7 +1225,7 @@ func (s *matchingPersistenceSuite) TestWorkflowMutableState_Timers() {
 	s.Equal(1, len(state.TimerInfos))
 	s.Equal(int64(3345), state.TimerInfos[timerID].Version)
 	s.Equal(timerID, state.TimerInfos[timerID].TimerID)
-	s.Equal(currentTime.Unix(), state.TimerInfos[timerID].ExpiryTime.Unix())
+	s.Equal(currentTime.Unix(), state.TimerInfos[timerID].ExpiryTime.Unix()) // flakey
 	s.Equal(int64(2), state.TimerInfos[timerID].TaskID)
 	s.Equal(int64(5), state.TimerInfos[timerID].StartedID)
 

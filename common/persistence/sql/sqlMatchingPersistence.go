@@ -527,8 +527,15 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 
 	if _, err := lockNextEventID(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId, *request.Execution.RunId);
 	err != nil {
-		return nil, &workflow.InternalServiceError{
-			Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to write-lock executions row. Error: %v", err),
+		switch err.(type) {
+		case *workflow.EntityNotExistsError:
+			return nil, &workflow.EntityNotExistsError{
+				Message: fmt.Sprintf("GetWorkflowExecution operation failed. Error: %v", err),
+			}
+		default:
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution operation failed. Failed to write-lock executions row. Error: %v", err),
+			}
 		}
 	}
 
@@ -1188,6 +1195,11 @@ func lockAndCheckNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, run
 func lockNextEventID(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) (*int64, error) {
 	var nextEventID int64
 	if err := tx.Get(&nextEventID, lockAndCheckNextEventIdSQLQuery, shardID, domainID, workflowID, runID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, &workflow.EntityNotExistsError{
+				Message: fmt.Sprintf("Failed to lock executions row with (shard, domain, workflow, run) = (%v,%v,%v,%v) which does not exist.", shardID, domainID, workflowID, runID),
+			}
+		}
 		return nil, &workflow.InternalServiceError{
 			Message: fmt.Sprintf("Failed to lock executions row. Error: %v", err),
 		}
