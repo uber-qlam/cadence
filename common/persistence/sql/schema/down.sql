@@ -14,3 +14,4 @@ DROP TABLE IF EXISTS child_execution_info_maps;
 DROP TABLE IF EXISTS request_cancel_info_maps;
 DROP TABLE IF EXISTS signal_info_maps;
 DROP TABLE IF EXISTS buffered_replication_task_maps;
+DROP TABLE IF EXISTS signals_requested_sets;

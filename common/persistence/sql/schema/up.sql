@@ -280,3 +280,12 @@ new_run_history BLOB,
 PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, first_event_id)
 );
 
+CREATE TABLE signals_requested_sets (
+	shard_id INT NOT NULL,
+	domain_id VARCHAR(64) NOT NULL,
+	workflow_id VARCHAR(255) NOT NULL,
+	run_id VARCHAR(64) NOT NULL,
+	signal_id VARCHAR(64) NOT NULL,
+	--
+	PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, signal_id)
+);

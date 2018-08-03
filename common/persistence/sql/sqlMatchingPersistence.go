@@ -523,6 +523,7 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 
 	// Have to lock next_event_id so that things aren't modified while we are getting
 	// all the other parts of mutable state
+	// TODO Replace with repeatable read transaction level
 
 	if _, err := lockNextEventID(tx, m.shardID, request.DomainID, *request.Execution.WorkflowId, *request.Execution.RunId);
 	err != nil {
@@ -686,6 +687,20 @@ func (m *sqlMatchingManager) GetWorkflowExecution(request *persistence.GetWorkfl
 		if err != nil {
 			return nil, &workflow.InternalServiceError{
 				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get buffered replication tasks. Error: %v", err),
+			}
+		}
+	}
+
+	{
+		var err error
+		state.SignalRequestedIDs, err = getSignalsRequested(tx,
+			m.shardID,
+			request.DomainID,
+			*request.Execution.WorkflowId,
+			*request.Execution.RunId)
+		if err != nil {
+			return nil, &workflow.InternalServiceError{
+				Message: fmt.Sprintf("GetWorkflowExecution failed. Failed to get signals requested. Error: %v", err),
 			}
 		}
 	}
@@ -909,6 +924,18 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		m.shardID,
 		request.ExecutionInfo.DomainID,
 		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
+		}
+	}
+
+	if err := updateSignalsRequested(tx,
+		request.UpsertSignalRequestedIDs,
+			request.DeleteSignalRequestedID,
+				m.shardID,
+		request.ExecutionInfo.DomainID,
+					request.ExecutionInfo.WorkflowID,
 		request.ExecutionInfo.RunID); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
