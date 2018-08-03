@@ -12,8 +12,7 @@ WHERE
 shard_id = :shard_id AND
 domain_id = :domain_id AND
 workflow_id = :workflow_id AND
-run_id = :run_id AND
-signal_id = :signal_id
+run_id = :run_id
 `
 
 	addToSignalsRequestedSetSQLQuery = `INSERT IGNORE INTO signals_requested_sets
@@ -116,3 +115,16 @@ func getSignalsRequested(tx *sqlx.Tx,
 		return ret, nil
 }
 
+func deleteSignalsRequestedSet(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteSignalsRequestedSetSQLQuery, &signalsRequestedSetsRow{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete signals requested set. Error: %v", err),
+		}
+	}
+	return nil
+}

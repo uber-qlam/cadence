@@ -134,7 +134,7 @@ var (
 	activityInfoTableName = "activity_info_maps"
 	activityInfoKey = "schedule_id"
 
-	deleteActivityInfoSQLQuery      = makeDeleteMapSQLQuery(activityInfoTableName)
+	deleteActivityInfoMapSQLQuery      = makeDeleteMapSQLQuery(activityInfoTableName)
 	setKeyInActivityInfoMapSQLQuery = makeSetKeyInMapSQLQuery(activityInfoTableName, activityInfoColumns, activityInfoKey)
 	deleteKeyInActivityInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(activityInfoTableName, activityInfoKey)
 	getActivityInfoMapSQLQuery = makeGetMapSQLQueryTemplate(activityInfoTableName, activityInfoColumns, activityInfoKey)
@@ -377,6 +377,20 @@ func getActivityInfoMap(tx *sqlx.Tx,
 		return ret, nil
 }
 
+func deleteActivityInfoMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteActivityInfoMapSQLQuery, &activityInfoMapsPrimaryKey{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete activity info map. Error: %v", err),
+		}
+	}
+	return nil
+}
+
 var (
 	timerInfoColumns = []string{
 		"version",
@@ -387,7 +401,7 @@ var (
 	timerInfoTableName = "timer_info_maps"
 	timerInfoKey = "timer_id"
 
-	deleteTimerInfoSQLQuery      = makeDeleteMapSQLQuery(timerInfoTableName)
+	deleteTimerInfoMapSQLQuery      = makeDeleteMapSQLQuery(timerInfoTableName)
 	setKeyInTimerInfoMapSQLQuery = makeSetKeyInMapSQLQuery(timerInfoTableName, timerInfoColumns, timerInfoKey)
 	deleteKeyInTimerInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(timerInfoTableName, timerInfoKey)
 	getTimerInfoMapSQLQuery = makeGetMapSQLQueryTemplate(timerInfoTableName, timerInfoColumns, timerInfoKey)
@@ -535,6 +549,19 @@ func getTimerInfoMap(tx *sqlx.Tx,
 	return ret, nil
 }
 
+func deleteTimerInfoMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteTimerInfoMapSQLQuery, &timerInfoMapsPrimaryKey{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete timer info map. Error: %v", err),
+		}
+	}
+	return nil
+}
 
 var (
 	childExecutionInfoColumns = []string{
@@ -547,10 +574,10 @@ var (
 	childExecutionInfoTableName = "child_execution_info_maps"
 	childExecutionInfoKey = "initiated_id"
 
-	deleteChildExecutionInfoSQLQuery      = makeDeleteMapSQLQuery(childExecutionInfoTableName)
-	setKeyInChildExecutionInfoMapSQLQuery = makeSetKeyInMapSQLQuery(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
+	deleteChildExecutionInfoMapSQLQuery      = makeDeleteMapSQLQuery(childExecutionInfoTableName)
+	setKeyInChildExecutionInfoMapSQLQuery    = makeSetKeyInMapSQLQuery(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
 	deleteKeyInChildExecutionInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(childExecutionInfoTableName, childExecutionInfoKey)
-	getChildExecutionInfoMapSQLQuery = makeGetMapSQLQueryTemplate(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
+	getChildExecutionInfoMapSQLQuery         = makeGetMapSQLQueryTemplate(childExecutionInfoTableName, childExecutionInfoColumns, childExecutionInfoKey)
 )
 
 type (
@@ -687,6 +714,20 @@ func getChildExecutionInfoMap(tx *sqlx.Tx,
 	return ret, nil
 }
 
+func deleteChildExecutionInfoMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteChildExecutionInfoMapSQLQuery, &childExecutionInfoMapsPrimaryKey{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete timer info map. Error: %v", err),
+		}
+	}
+	return nil
+}
+
 
 var (
 	requestCancelInfoColumns = []string{
@@ -696,7 +737,7 @@ var (
 	requestCancelInfoTableName = "request_cancel_info_maps"
 	requestCancelInfoKey = "initiated_id"
 
-	deleteRequestCancelInfoSQLQuery      = makeDeleteMapSQLQuery(requestCancelInfoTableName)
+	deleteRequestCancelInfoMapSQLQuery      = makeDeleteMapSQLQuery(requestCancelInfoTableName)
 	setKeyInRequestCancelInfoMapSQLQuery = makeSetKeyInMapSQLQuery(requestCancelInfoTableName, requestCancelInfoColumns, requestCancelInfoKey)
 	deleteKeyInRequestCancelInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(requestCancelInfoTableName, requestCancelInfoKey)
 	getRequestCancelInfoMapSQLQuery = makeGetMapSQLQueryTemplate(requestCancelInfoTableName, requestCancelInfoColumns, requestCancelInfoKey)
@@ -826,6 +867,20 @@ func getRequestCancelInfoMap(tx *sqlx.Tx,
 	return ret, nil
 }
 
+func deleteRequestCancelInfoMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteRequestCancelInfoMapSQLQuery, &requestCancelInfoMapsPrimaryKey{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete request cancel info map. Error: %v", err),
+		}
+	}
+	return nil
+}
+
 var (
 	signalInfoColumns = []string{
 		"version",
@@ -837,7 +892,7 @@ var (
 	signalInfoTableName = "signal_info_maps"
 	signalInfoKey = "initiated_id"
 
-	deleteSignalInfoSQLQuery      = makeDeleteMapSQLQuery(signalInfoTableName)
+	deleteSignalInfoMapSQLQuery      = makeDeleteMapSQLQuery(signalInfoTableName)
 	setKeyInSignalInfoMapSQLQuery = makeSetKeyInMapSQLQuery(signalInfoTableName, signalInfoColumns, signalInfoKey)
 	deleteKeyInSignalInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(signalInfoTableName, signalInfoKey)
 	getSignalInfoMapSQLQuery = makeGetMapSQLQueryTemplate(signalInfoTableName, signalInfoColumns, signalInfoKey)
@@ -975,6 +1030,20 @@ func getSignalInfoMap(tx *sqlx.Tx,
 	}
 
 	return ret, nil
+}
+
+func deleteSignalInfoMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+	if _, err := tx.NamedExec(deleteSignalInfoMapSQLQuery, &requestCancelInfoMapsPrimaryKey{
+		ShardID: int64(shardID),
+		DomainID: domainID,
+		WorkflowID: workflowID,
+		RunID: runID,
+	}); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to delete signal info map. Error: %v", err),
+		}
+	}
+	return nil
 }
 
 var (
@@ -1149,3 +1218,17 @@ func getBufferedReplicationTasks(tx *sqlx.Tx,
 
 	return ret, nil
 }
+//
+//func deleteBufferedReplicationTaskMap(tx *sqlx.Tx, shardID int, domainID, workflowID, runID string) error {
+//	if _, err := tx.Exec(deleteBufferedReplicationTasksMapSQLQuery, &bufferedReplicationTaskMapsPrimaryKey{
+//		ShardID: int64(shardID),
+//		DomainID: domainID,
+//		WorkflowID: workflowID,
+//		RunID: runID,
+//	}); err != nil {
+//		return &workflow.InternalServiceError{
+//			Message: fmt.Sprintf("Failed to delete buffered replication task map. Error: %v", err),
+//		}
+//	}
+//	return nil
+//}

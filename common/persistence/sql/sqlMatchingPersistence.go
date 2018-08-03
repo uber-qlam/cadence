@@ -758,13 +758,16 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
+	// TODO Note to self: The only reason that this is up here because a certain test was required
+	// TODO to fail due to ShardOwnershipLostError and not due to ConditionFailedError
+	// TODO Otherwise, it'd probably be OK to put this right before the .Commit()
 	if err := lockShard(tx, m.shardID, request.RangeID); err != nil {
 		switch err.(type) {
 		case *persistence.ShardOwnershipLostError:
 			return err
 		default:
 			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("CreateWorkflowExecution operation failed. Error: %v", err),
+				Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Error: %v", err),
 			}
 		}
 	}
@@ -786,82 +789,9 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 	}
 
-	args := updateExecutionRow{
-		executionRow{
-			DomainID:                   request.ExecutionInfo.DomainID,
-			WorkflowID:                 request.ExecutionInfo.WorkflowID,
-			RunID:                      request.ExecutionInfo.RunID,
-			ParentDomainID:             &request.ExecutionInfo.ParentDomainID,
-			ParentWorkflowID:           &request.ExecutionInfo.ParentWorkflowID,
-			ParentRunID:                &request.ExecutionInfo.ParentRunID,
-			InitiatedID:                &request.ExecutionInfo.InitiatedID,
-			CompletionEvent:            &request.ExecutionInfo.CompletionEvent,
-			TaskList:                   request.ExecutionInfo.TaskList,
-			WorkflowTypeName:           request.ExecutionInfo.WorkflowTypeName,
-			WorkflowTimeoutSeconds:     int64(request.ExecutionInfo.WorkflowTimeout),
-			DecisionTaskTimeoutMinutes: int64(request.ExecutionInfo.DecisionTimeoutValue),
-			State:                        int64(request.ExecutionInfo.State),
-			CloseStatus:                  int64(request.ExecutionInfo.CloseStatus),
-			LastFirstEventID:             int64(request.ExecutionInfo.LastFirstEventID),
-			NextEventID:                  int64(request.ExecutionInfo.NextEventID),
-			LastProcessedEvent:           int64(request.ExecutionInfo.LastProcessedEvent),
-			StartTime:                    request.ExecutionInfo.StartTimestamp,
-			LastUpdatedTime:              request.ExecutionInfo.LastUpdatedTimestamp,
-			CreateRequestID:              request.ExecutionInfo.CreateRequestID,
-			DecisionVersion:              request.ExecutionInfo.DecisionVersion,
-			DecisionScheduleID:           request.ExecutionInfo.DecisionScheduleID,
-			DecisionStartedID:            request.ExecutionInfo.DecisionStartedID,
-			DecisionRequestID:            request.ExecutionInfo.DecisionRequestID,
-			DecisionTimeout:              int64(request.ExecutionInfo.DecisionTimeout),
-			DecisionAttempt:              request.ExecutionInfo.DecisionAttempt,
-			DecisionTimestamp:            request.ExecutionInfo.DecisionTimestamp,
-			StickyTaskList:               request.ExecutionInfo.StickyTaskList,
-			StickyScheduleToStartTimeout: int64(request.ExecutionInfo.StickyScheduleToStartTimeout),
-			ClientLibraryVersion:         request.ExecutionInfo.ClientLibraryVersion,
-			ClientFeatureVersion:         request.ExecutionInfo.ClientFeatureVersion,
-			ClientImpl:                   request.ExecutionInfo.ClientImpl,
-		},
-		request.Condition,
-	}
-
-	if request.ExecutionInfo.ExecutionContext != nil {
-		args.executionRow.ExecutionContext = &request.ExecutionInfo.ExecutionContext
-	}
-
-	if request.ReplicationState != nil {
-		args.StartVersion = &request.ReplicationState.StartVersion
-	}
-
-	if request.ExecutionInfo.ParentDomainID != "" {
-		args.ParentDomainID = &request.ExecutionInfo.ParentDomainID
-		args.ParentWorkflowID = &request.ExecutionInfo.ParentWorkflowID
-		args.ParentRunID = &request.ExecutionInfo.ParentRunID
-		args.InitiatedID = &request.ExecutionInfo.InitiatedID
-		args.CompletionEvent = &request.ExecutionInfo.CompletionEvent
-	}
-
-	if request.ExecutionInfo.CancelRequested {
-		var i int64 = 1
-		args.CancelRequested = &i
-		args.CancelRequestID = &request.ExecutionInfo.CancelRequestID
-	}
-
-	result, err := tx.NamedExec(updateExecutionSQLQuery, &args)
-	if err != nil {
+	if err := updateExecution(tx, request.ExecutionInfo, request.ReplicationState, request.Condition); err != nil {
 		return &workflow.InternalServiceError{
 			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to update executions row. Erorr: %v", err),
-		}
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to verify number of rows affected. Erorr: %v", err),
-		}
-	}
-	if rowsAffected != 1 {
-		return &workflow.InternalServiceError{
-			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. %v rows updated instead of 1.", rowsAffected),
 		}
 	}
 
@@ -958,7 +888,187 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 	return nil
 }
 
-func (*sqlMatchingManager) ResetMutableState(request *persistence.ResetMutableStateRequest) error {
+func (m *sqlMatchingManager) ResetMutableState(request *persistence.ResetMutableStateRequest) error {
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to start transaction. Error: %v", err),
+		}
+	}
+	defer tx.Rollback()
+
+	// TODO Is there a way to modify the various map tables without fear of other people adding rows after we delete, without locking the executions row?
+	if err := lockAndCheckNextEventID(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID,
+		request.Condition); err != nil {
+		switch err.(type) {
+		case *persistence.ConditionFailedError:
+			return err
+		default:
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("ResetMutableState operation failed. Failed to lock executions row. Error: %v", err),
+			}
+		}
+	}
+
+	if err := updateExecution(tx, request.ExecutionInfo, request.ReplicationState, request.Condition); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("UpdateWorkflowExecution operation failed. Failed to update executions row. Erorr: %v", err),
+		}
+	}
+
+	if err := deleteActivityInfoMap(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear activity info map. Error: %v", err),
+		}
+	}
+
+	if err := updateActivityInfos(tx,
+		request.InsertActivityInfos,
+		nil,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into activity info map after clearing. Error: %v", err),
+		}
+	}
+
+	if err := deleteTimerInfoMap(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear timer info map. Error: %v", err),
+		}
+	}
+
+	if err := updateTimerInfos(tx,
+		request.InsertTimerInfos,
+		nil,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into timer info map after clearing. Error: %v", err),
+		}
+	}
+
+	if err := deleteChildExecutionInfoMap(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear child execution info map. Error: %v", err),
+		}
+	}
+
+	if err := updateChildExecutionInfos(tx,
+		request.InsertChildExecutionInfos,
+		nil,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into activity info map after clearing. Error: %v", err),
+		}
+	}
+
+	if err := deleteRequestCancelInfoMap(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear request cancel info map. Error: %v", err),
+		}
+	}
+
+	if err := updateRequestCancelInfos(tx,
+		request.InsertRequestCancelInfos,
+		nil,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into request cancel info map after clearing. Error: %v", err),
+		}
+	}
+
+	if err := deleteSignalInfoMap(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear signal info map. Error: %v", err),
+		}
+	}
+
+	if err := updateSignalInfos(tx,
+		request.InsertSignalInfos,
+		nil,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into signal info map after clearing. Error: %v", err),
+		}
+	}
+
+	if err := deleteSignalsRequestedSet(tx,
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to clear signals requested set. Error: %v", err),
+		}
+	}
+
+	if err := updateSignalsRequested(tx,
+		request.InsertSignalRequestedIDs,
+		"",
+		m.shardID,
+		request.ExecutionInfo.DomainID,
+		request.ExecutionInfo.WorkflowID,
+		request.ExecutionInfo.RunID); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to insert into signals requested set after clearing. Error: %v", err),
+		}
+	}
+
+	if err := lockShard(tx, m.shardID, request.RangeID); err != nil {
+		switch err.(type) {
+		case *persistence.ShardOwnershipLostError:
+			return err
+		default:
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("ResetMutableState operation failed. Error: %v", err),
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("ResetMutableState operation failed. Failed to commit transaction. Error: %v", err),
+		}
+	}
+
 	return nil
 }
 
@@ -1462,5 +1572,91 @@ func createTimerTasks(tx *sqlx.Tx, timerTasks []persistence.Task, deleteTimerTas
 		}
 	}
 
+	return nil
+}
+
+func updateExecution(tx *sqlx.Tx, 
+	executionInfo *persistence.WorkflowExecutionInfo, 
+	replicationState *persistence.ReplicationState,
+	condition int64) error {
+	args := updateExecutionRow{
+		executionRow{
+			DomainID:                   executionInfo.DomainID,
+			WorkflowID:                 executionInfo.WorkflowID,
+			RunID:                      executionInfo.RunID,
+			ParentDomainID:             &executionInfo.ParentDomainID,
+			ParentWorkflowID:           &executionInfo.ParentWorkflowID,
+			ParentRunID:                &executionInfo.ParentRunID,
+			InitiatedID:                &executionInfo.InitiatedID,
+			CompletionEvent:            &executionInfo.CompletionEvent,
+			TaskList:                   executionInfo.TaskList,
+			WorkflowTypeName:           executionInfo.WorkflowTypeName,
+			WorkflowTimeoutSeconds:     int64(executionInfo.WorkflowTimeout),
+			DecisionTaskTimeoutMinutes: int64(executionInfo.DecisionTimeoutValue),
+			State:                        int64(executionInfo.State),
+			CloseStatus:                  int64(executionInfo.CloseStatus),
+			LastFirstEventID:             int64(executionInfo.LastFirstEventID),
+			NextEventID:                  int64(executionInfo.NextEventID),
+			LastProcessedEvent:           int64(executionInfo.LastProcessedEvent),
+			StartTime:                    executionInfo.StartTimestamp,
+			LastUpdatedTime:              executionInfo.LastUpdatedTimestamp,
+			CreateRequestID:              executionInfo.CreateRequestID,
+			DecisionVersion:              executionInfo.DecisionVersion,
+			DecisionScheduleID:           executionInfo.DecisionScheduleID,
+			DecisionStartedID:            executionInfo.DecisionStartedID,
+			DecisionRequestID:            executionInfo.DecisionRequestID,
+			DecisionTimeout:              int64(executionInfo.DecisionTimeout),
+			DecisionAttempt:              executionInfo.DecisionAttempt,
+			DecisionTimestamp:            executionInfo.DecisionTimestamp,
+			StickyTaskList:               executionInfo.StickyTaskList,
+			StickyScheduleToStartTimeout: int64(executionInfo.StickyScheduleToStartTimeout),
+			ClientLibraryVersion:         executionInfo.ClientLibraryVersion,
+			ClientFeatureVersion:         executionInfo.ClientFeatureVersion,
+			ClientImpl:                   executionInfo.ClientImpl,
+		},
+		condition,
+	}
+
+	if executionInfo.ExecutionContext != nil {
+		args.executionRow.ExecutionContext = &executionInfo.ExecutionContext
+	}
+
+	if replicationState != nil {
+		args.StartVersion = &replicationState.StartVersion
+	}
+
+	if executionInfo.ParentDomainID != "" {
+		args.ParentDomainID = &executionInfo.ParentDomainID
+		args.ParentWorkflowID = &executionInfo.ParentWorkflowID
+		args.ParentRunID = &executionInfo.ParentRunID
+		args.InitiatedID = &executionInfo.InitiatedID
+		args.CompletionEvent = &executionInfo.CompletionEvent
+	}
+
+	if executionInfo.CancelRequested {
+		var i int64 = 1
+		args.CancelRequested = &i
+		args.CancelRequestID = &executionInfo.CancelRequestID
+	}
+
+	result, err := tx.NamedExec(updateExecutionSQLQuery, &args)
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to update executions row. Erorr: %v", err),
+		}
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to update executions row. Failed to verify number of rows affected. Erorr: %v", err),
+		}
+	}
+	if rowsAffected != 1 {
+		return &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to update executions row. Affected %v rows updated instead of 1.", rowsAffected),
+		}
+	}
+	
 	return nil
 }
