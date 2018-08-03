@@ -245,6 +245,22 @@ run_id CHAR(64) NOT NULL,
 initiated_id BIGINT NOT NULL,
 --
 version BIGINT NOT NULL,
-cancel_request_id CHAR(64) NOT NULL, -- what string type should this be?
+cancel_request_id CHAR(64) NOT NULL, -- a uuid
+PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, initiated_id)
+);
+
+
+CREATE TABLE signal_info_maps (
+ shard_id INT NOT NULL,
+domain_id CHAR(64) NOT NULL,
+workflow_id VARCHAR(255) NOT NULL,
+run_id CHAR(64) NOT NULL,
+initiated_id BIGINT NOT NULL,
+--
+version BIGINT NOT NULL,
+signal_request_id CHAR(64) NOT NULL, -- uuid
+signal_name VARCHAR(255) NOT NULL,
+input BLOB,
+control BLOB,
 PRIMARY KEY (shard_id, domain_id, workflow_id, run_id, initiated_id)
 );

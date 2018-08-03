@@ -12,3 +12,5 @@ DROP TABLE IF EXISTS activity_info_maps;
 DROP TABLE IF EXISTS timer_info_maps;
 DROP TABLE IF EXISTS child_execution_info_maps;
 DROP TABLE IF EXISTS request_cancel_info_maps;
+DROP TABLE IF EXISTS signal_info_maps;
+

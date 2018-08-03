@@ -776,18 +776,18 @@ func updateRequestCancelInfos(tx *sqlx.Tx,
 			InitiatedID: *deleteInfo,
 		}); err != nil {
 			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("Failed to update timer info. Failed to execute delete query. Error: %v", err),
+				Message: fmt.Sprintf("Failed to update request cancel info. Failed to execute delete query. Error: %v", err),
 			}
 		} else {
 			rowsAffected, err := result.RowsAffected()
 			if err != nil {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Failed to update timer info. Failed to verify number of rows deleted. Error: %v", err),
+					Message: fmt.Sprintf("Failed to update request cancel info. Failed to verify number of rows deleted. Error: %v", err),
 				}
 			}
 			if int(rowsAffected) != 1 {
 				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("Failed to update timer info. Deleted %v rows instead of %v", len(deleteRequestCancelInfoSQLQuery), rowsAffected),
+					Message: fmt.Sprintf("Failed to update request cancel info. Deleted %v rows instead of %v", len(deleteRequestCancelInfoSQLQuery), rowsAffected),
 				}
 			}
 		}
@@ -820,6 +820,157 @@ func getRequestCancelInfoMap(tx *sqlx.Tx,
 			Version: v.Version,
 			CancelRequestID: v.CancelRequestID,
 			InitiatedID: v.InitiatedID,
+		}
+	}
+
+	return ret, nil
+}
+
+var (
+	signalInfoColumns = []string{
+		"version",
+		"signal_request_id",
+		"signal_name",
+		"input",
+		"control",
+	}
+	signalInfoTableName = "signal_info_maps"
+	signalInfoKey = "initiated_id"
+
+	deleteSignalInfoSQLQuery      = makeDeleteMapSQLQuery(signalInfoTableName)
+	setKeyInSignalInfoMapSQLQuery = makeSetKeyInMapSQLQuery(signalInfoTableName, signalInfoColumns, signalInfoKey)
+	deleteKeyInSignalInfoMapSQLQuery = makeDeleteKeyInMapSQLQuery(signalInfoTableName, signalInfoKey)
+	getSignalInfoMapSQLQuery = makeGetMapSQLQueryTemplate(signalInfoTableName, signalInfoColumns, signalInfoKey)
+)
+
+
+type (
+	signalInfoMapsPrimaryKey struct {
+		ShardID    int64  `db:"shard_id"`
+		DomainID   string `db:"domain_id"`
+		WorkflowID string `db:"workflow_id"`
+		RunID      string `db:"run_id"`
+		InitiatedID int64  `db:"initiated_id"`
+	}
+
+	signalInfoMapsRow struct {
+		signalInfoMapsPrimaryKey
+		Version int64 `db:"version"`
+		SignalRequestID string `db:"signal_request_id"`
+		SignalName      string `db:"signal_name"`
+		Input           *[]byte `db:"input"`
+		Control         *[]byte `db:"control"`
+	}
+)
+
+func updateSignalInfos(tx *sqlx.Tx,
+	signalInfos []*persistence.SignalInfo,
+	deleteInfo *int64,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) error {
+	if len(signalInfos) > 0 {
+		signalInfoMapsRows := make([]*signalInfoMapsRow, len(signalInfos))
+		for i, v := range signalInfos {
+			signalInfoMapsRows[i] = &signalInfoMapsRow{
+				signalInfoMapsPrimaryKey: signalInfoMapsPrimaryKey{
+					ShardID: int64(shardID),
+					DomainID: domainID,
+					WorkflowID: workflowID,
+					RunID: runID,
+					InitiatedID: v.InitiatedID,
+				},
+				Version: v.Version,
+				SignalRequestID: v.SignalRequestID,
+				SignalName: v.SignalName,
+				Input: takeAddressIfNotNil(v.Input),
+				Control: takeAddressIfNotNil(v.Control),
+			}
+		}
+
+		query, args, err := tx.BindNamed(setKeyInSignalInfoMapSQLQuery, signalInfoMapsRows)
+		if err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update signal info. Failed to bind query. Error: %v", err),
+			}
+		}
+
+		if result, err := tx.Exec(query, args...); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update signal info. Failed to execute update query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update signal info. Failed to verify number of rows updated. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != len(signalInfos) {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update signal info. Touched %v rows instead of %v", len(signalInfos), rowsAffected),
+				}
+			}
+		}
+
+	}
+	if deleteInfo != nil {
+		if result, err := tx.NamedExec(deleteKeyInSignalInfoMapSQLQuery, &signalInfoMapsPrimaryKey{
+			ShardID:    int64(shardID),
+			DomainID:   domainID,
+			WorkflowID: workflowID,
+			RunID:      runID,
+			InitiatedID: *deleteInfo,
+		}); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("Failed to update signal info. Failed to execute delete query. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update signal info. Failed to verify number of rows deleted. Error: %v", err),
+				}
+			}
+			if int(rowsAffected) != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("Failed to update signal info. Deleted %v rows instead of %v", len(deleteSignalInfoSQLQuery), rowsAffected),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getSignalInfoMap(tx *sqlx.Tx,
+	shardID int,
+	domainID,
+	workflowID,
+	runID string) (map[int64]*persistence.SignalInfo, error) {
+	var signalInfoMapsRows []signalInfoMapsRow
+
+	if err := tx.Select(&signalInfoMapsRows,
+		getSignalInfoMapSQLQuery,
+		shardID,
+		domainID,
+		workflowID,
+		runID); err != nil {
+		return nil, &workflow.InternalServiceError{
+			Message: fmt.Sprintf("Failed to get signal info. Error: %v", err),
+		}
+	}
+
+	ret := make(map[int64]*persistence.SignalInfo)
+	for _, v := range signalInfoMapsRows {
+		ret[v.InitiatedID] = &persistence.SignalInfo{
+			Version: v.Version,
+			InitiatedID: v.InitiatedID,
+			SignalRequestID: v.SignalRequestID,
+			SignalName: v.SignalName,
+			Input: dereferenceIfNotNil(v.Input),
+			Control: dereferenceIfNotNil(v.Control),
 		}
 	}
 
