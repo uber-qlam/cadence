@@ -501,7 +501,7 @@ func (m *sqlMatchingManager) CreateWorkflowExecution(request *persistence.Create
 	}
 
 	if err := createTimerTasks(tx,
-		request.ReplicationTasks,
+		request.TimerTasks,
 		nil,
 		m.shardID,
 		request.DomainID,
@@ -779,7 +779,7 @@ func (m *sqlMatchingManager) UpdateWorkflowExecution(request *persistence.Update
 		}
 
 		if err := createTimerTasks(tx,
-			request.ContinueAsNew.TransferTasks,
+			request.ContinueAsNew.TimerTasks,
 			nil,
 			m.shardID,
 			request.ContinueAsNew.DomainID,

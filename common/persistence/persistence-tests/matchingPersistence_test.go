@@ -1055,6 +1055,8 @@ func (s *matchingPersistenceSuite) TestTransferTasks() {
 }
 
 func (s *matchingPersistenceSuite) TestTimerTasks() {
+	// TODO Test CreateWorkflowExecution with a timer task (as opposed to update)
+
 	domainID := "8bfb47be-5b57-4d66-9109-5fb35e20b1d7"
 	workflowExecution := gen.WorkflowExecution{
 		WorkflowId: common.StringPtr("get-timer-tasks-test"),
