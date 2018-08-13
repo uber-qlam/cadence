@@ -1,0 +1,43 @@
+version: '3'
+services:
+  cassandra:
+    image: cassandra:3.11
+    ports:
+      - "9042:9042"
+  mysql:
+    image: mysql:5.6
+    ports:
+      - "3306:3306"
+    environment:
+      - "MYSQL_ROOT_PASSWORD=rootpassword"
+      - "MYSQL_USER=uber"
+      - "MYSQL_PASSWORD=uber"
+      - "MYSQL_DATABASE=catalyst_test"
+  statsd:
+    image: hopsoft/graphite-statsd
+    ports:
+      - "8080:80"
+      - "2003:2003"
+      - "8125:8125"
+      - "8126:8126"
+  cadence:
+    image: ubercadence/server:mysqlpersistence
+    ports:
+     - "7933:7933"
+     - "7934:7934"
+     - "7935:7935"
+    environment:
+      - "CASSANDRA_SEEDS=cassandra"
+      - "STATSD_ENDPOINT=statsd:8125"
+    depends_on:
+      - mysql
+      - cassandra
+      - statsd
+  cadence-web:
+    image: ubercadence/web:2.4.0
+    environment:
+      - "CADENCE_TCHANNEL_PEERS=cadence:7933"
+    ports:
+      - "8088:8088"
+    depends_on:
+      - cadence

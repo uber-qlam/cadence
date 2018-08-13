@@ -1,0 +1,53 @@
+log:
+  stdout: true
+  level: "${LOG_LEVEL}"
+
+cassandra:
+  hosts: "${CASSANDRA_SEEDS}"
+  keyspace: "${KEYSPACE}"
+  visibilityKeyspace: "${VISIBILITY_KEYSPACE}"
+  consistency: "${CASSANDRA_CONSISTENCY}"
+  numHistoryShards: ${NUM_HISTORY_SHARDS}
+
+ringpop:
+  name: cadence
+  bootstrapMode: hosts
+  bootstrapHosts: ${RINGPOP_SEEDS_JSON_ARRAY}
+  maxJoinDuration: 30s
+
+services:
+  frontend:
+    rpc:
+      port: 7933
+      bindOnLocalHost: ${BIND_ON_LOCALHOST}
+    metrics:
+      statsd:
+        hostPort: "${STATSD_ENDPOINT}"
+        prefix: "cadence-frontend"
+
+  matching:
+    rpc:
+      port: 7935
+      bindOnLocalHost: ${BIND_ON_LOCALHOST}
+    metrics:
+      statsd:
+        hostPort: "${STATSD_ENDPOINT}"
+        prefix: "cadence-matching"
+
+  history:
+    rpc:
+      port: 7934
+      bindOnLocalHost: ${BIND_ON_LOCALHOST}
+    metrics:
+      statsd:
+        hostPort: "${STATSD_ENDPOINT}"
+        prefix: "cadence-history"
+
+clustersInfo:
+  enableGlobalDomain: false
+  failoverVersionIncrement: 10
+  masterClusterName: "active"
+  currentClusterName: "active"
+  clusterInitialFailoverVersion:
+    active: 0
+    standby: 1
