@@ -189,7 +189,7 @@ func (s *Service) Start() {
 	if sc.UseMysql || sc.UseSqlExecutions || sc.UseSqlShard {
 		shardMgr, err = sql.NewShardPersistence("uber",
 			"uber",
-			"localhost",
+			"mysql",
 			"3306",
 			"catalyst_test",
 			p.ClusterMetadata.GetCurrentClusterName())
@@ -217,7 +217,7 @@ func (s *Service) Start() {
 	if sc.UseMysql || sc.UseSqlMetadata {
 		metadata, err = sql.NewMetadataPersistence("uber",
 			"uber",
-			"localhost",
+			"mysql",
 			"3306",
 			"catalyst_test")
 	} else {
@@ -253,7 +253,7 @@ func (s *Service) Start() {
 	if sc.UseMysql || sc.UseSqlHistory {
 		history, err = sql.NewHistoryPersistence("uber",
 			"uber",
-			"localhost",
+			"mysql",
 			"3306",
 			"catalyst_test",
 			p.Logger)

@@ -84,7 +84,7 @@ func (s *Service) Start() {
 	if sc.UseMysql || sc.UseSqlMetadata {
 		metadata, err = sql.NewMetadataPersistence("uber",
 			"uber",
-			"localhost",
+			"mysql",
 			"3306",
 			"catalyst_test")
 	} else {
@@ -120,7 +120,7 @@ func (s *Service) Start() {
 	if sc.UseMysql || sc.UseSqlHistory {
 		history, err = sql.NewHistoryPersistence("uber",
 			"uber",
-			"localhost",
+			"mysql",
 			"3306",
 			"catalyst_test",
 			log)
