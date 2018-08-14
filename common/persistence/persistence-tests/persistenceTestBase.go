@@ -262,7 +262,7 @@ func (s *TestBase) SetupWorkflowStoreWithOptions(options TestBaseOptions, metada
 			log.Fatal(err)
 		}
 
-		file, err := ioutil.ReadFile("../sql/schema/up.sql")
+		file, err := ioutil.ReadFile("../sql/schema/1_base.up.sql")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1122,7 +1122,7 @@ func (s *TestBase) TearDownWorkflowStore() {
 			log.Fatal(err)
 		}
 
-		file, err := ioutil.ReadFile("../sql/schema/down.sql")
+		file, err := ioutil.ReadFile("../sql/schema/1_base.down.sql")
 		if err != nil {
 			log.Fatal(err)
 		}
