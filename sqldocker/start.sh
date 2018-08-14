@@ -36,7 +36,7 @@ setup_cassandra_schema() {
 setup_mysql_schema() {
     wget https://github.com/golang-migrate/migrate/releases/download/v3.4.0/migrate.linux-amd64.tar.gz
     tar xf migrate.linux-amd64.tar.gz
-    ./migrate.linux-amd64 -source 'file://common/persistence/sql/schema' -database 'mysql://uber:uber@tcp(mysql:3306)/catalyst_test' up 1
+    ./migrate.linux-amd64 -source 'file://common/persistence/sql/schema' -database 'mysql://uber:uber@tcp(mysql:3306)/catalyst_test' up
 }
 
 enable_mysql_persistence() {
