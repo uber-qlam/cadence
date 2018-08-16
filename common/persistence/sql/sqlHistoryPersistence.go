@@ -124,6 +124,24 @@ func (m *sqlHistoryManager) AppendHistoryEvents(request *persistence.AppendHisto
 		}
 		defer tx.Rollback()
 
+		if result, err := tx.NamedExec(overwriteHistorySQLQuery, arg); err != nil {
+			return &workflow.InternalServiceError{
+				Message: fmt.Sprintf("AppendHistoryEvents operation failed. Update failed. Error: %v", err),
+			}
+		} else {
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Failed to check number of rows updated. Error: %v", err),
+				}
+			}
+			if rowsAffected != 1 {
+				return &workflow.InternalServiceError{
+					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Updated %v rows instead of one.", rowsAffected),
+				}
+			}
+		}
+
 		if err := lockAndCheckRangeIDAndTxID(tx,
 			request.RangeID,
 			request.TransactionID,
@@ -143,27 +161,9 @@ func (m *sqlHistoryManager) AppendHistoryEvents(request *persistence.AppendHisto
 			}
 		}
 
-		if result, err := tx.NamedExec(overwriteHistorySQLQuery, arg); err != nil {
-			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("AppendHistoryEvents operation failed. Update failed. Error: %v", err),
-			}
-		} else {
-			rowsAffected, err := result.RowsAffected()
-			if err != nil {
-				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Failed to check number of rows updated. Error: %v", err),
-				}
-			}
-			if rowsAffected != 1 {
-				return &workflow.InternalServiceError{
-					Message: fmt.Sprintf("AppendHistoryEvents operation failed. Updated %v rows instead of one.", rowsAffected),
-				}
-			}
-		}
-
 		if err := tx.Commit(); err != nil {
 			return &workflow.InternalServiceError{
-				Message: fmt.Sprintf("AppendHistoryEvents operation failed. Failed to lock row. Error: %v", err),
+				Message: fmt.Sprintf("AppendHistoryEvents operation failed. Failed to commit transaction. Error: %v", err),
 			}
 		}
 	} else {
